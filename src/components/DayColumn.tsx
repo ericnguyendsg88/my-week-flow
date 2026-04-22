@@ -8,16 +8,27 @@ interface Props {
   events: CalEvent[];
   daysLeft: number;
   isFirst?: boolean;
+  pickMode?: boolean;
+  onPickSlot?: (date: string, minutes: number) => void;
 }
 
 const HOUR_HEIGHT = 56; // px
 const START_HOUR = 7;
 const END_HOUR = 22;
 
-export function DayColumn({ date, events, isFirst }: Props) {
+export function DayColumn({ date, events, isFirst, pickMode, onPickSlot }: Props) {
   const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
   const dayKey = format(date, "yyyy-MM-dd");
   const today = isToday(date);
+
+  function handleGridClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (!pickMode || !onPickSlot) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const totalMinutes = (y / HOUR_HEIGHT) * 60;
+    const snapped = Math.round(totalMinutes / 15) * 15 + START_HOUR * 60;
+    onPickSlot(dayKey, snapped);
+  }
 
   return (
     <div className="flex w-[200px] shrink-0 flex-col">
