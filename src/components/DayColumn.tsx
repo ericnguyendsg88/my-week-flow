@@ -53,8 +53,16 @@ export function DayColumn({ date, events, isFirst, pickMode, onPickSlot }: Props
       </div>
 
       {/* Grid */}
-      <div className="relative flex-1 rounded-3xl bg-card/60 p-1 ring-1 ring-border/60">
-        <div className="relative" style={{ height: (END_HOUR - START_HOUR) * HOUR_HEIGHT }}>
+      <div
+        className={`relative flex-1 rounded-3xl bg-card/60 p-1 ring-1 transition-all ${
+          pickMode ? "cursor-crosshair ring-2 ring-primary/60 shadow-bubble" : "ring-border/60"
+        }`}
+      >
+        <div
+          className="relative"
+          style={{ height: (END_HOUR - START_HOUR) * HOUR_HEIGHT }}
+          onClick={handleGridClick}
+        >
           {hours.map((h, i) => (
             <div
               key={h}
