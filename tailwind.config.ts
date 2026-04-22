@@ -13,6 +13,10 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        display: ['"Plus Jakarta Sans"', "system-ui", "sans-serif"],
+        sans: ['"Plus Jakarta Sans"', '"Inter"', "system-ui", "sans-serif"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -57,11 +61,21 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        category: {
+          work: { DEFAULT: "hsl(var(--cat-work))", soft: "hsl(var(--cat-work-soft))" },
+          personal: { DEFAULT: "hsl(var(--cat-personal))", soft: "hsl(var(--cat-personal-soft))" },
+          health: { DEFAULT: "hsl(var(--cat-health))", soft: "hsl(var(--cat-health-soft))" },
+          social: { DEFAULT: "hsl(var(--cat-social))", soft: "hsl(var(--cat-social-soft))" },
+          focus: { DEFAULT: "hsl(var(--cat-focus))", soft: "hsl(var(--cat-focus-soft))" },
+          errand: { DEFAULT: "hsl(var(--cat-errand))", soft: "hsl(var(--cat-errand-soft))" },
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        "4xl": "2rem",
+        bubble: "1.75rem",
       },
       keyframes: {
         "accordion-down": {
