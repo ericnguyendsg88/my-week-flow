@@ -1,11 +1,10 @@
-import { useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useCallback, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import { addDays, format, isSunday, nextSunday, startOfDay } from "date-fns";
-import { CalendarDays, Inbox } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import { CalEvent } from "@/types/event";
 import { TaskComposer } from "@/components/TaskComposer";
 import { DayColumn } from "@/components/DayColumn";
-import { EventBubble } from "@/components/EventBubble";
 
 const Index = () => {
   const today = startOfDay(new Date());
