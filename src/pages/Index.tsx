@@ -30,16 +30,16 @@ const Index = () => {
     ];
   });
 
-  const [recent, setRecent] = useState<CalEvent[]>([]);
+  const [pickMode, setPickMode] = useState(false);
+  const [pickedSlot, setPickedSlot] = useState<{ date: string; start: number } | null>(null);
 
-  function handleCommit(e: CalEvent) {
-    setRecent((r) => [e, ...r].slice(0, 5));
-    // brief delay so user sees the bubble in the inbox before it flies into the grid
-    setTimeout(() => {
-      setEvents((prev) => [...prev, e]);
-      setRecent((r) => r.filter((x) => x.id !== e.id));
-    }, 450);
-  }
+  const handleCommit = useCallback((e: CalEvent) => {
+    setEvents((prev) => [...prev, e]);
+  }, []);
+
+  const handlePickSlot = useCallback((date: string, start: number) => {
+    setPickedSlot({ date, start });
+  }, []);
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-canvas">
