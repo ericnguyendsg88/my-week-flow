@@ -152,26 +152,5 @@ function ViewChip({ label, active }: { label: string; active?: boolean }) {
   );
 }
 
-function Tips() {
-  return (
-    <div className="mt-4 space-y-1.5 px-1">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-        Try saying
-      </p>
-      {[
-        "Coffee with Alex Thursday",
-        "Deep work on Q2 plan 90m",
-        "Gym tomorrow morning",
-      ].map((s) => (
-        <div
-          key={s}
-          className="rounded-full bg-muted/60 px-3 py-1 text-[11px] font-medium text-muted-foreground"
-        >
-          “{s}”
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export default Index;
