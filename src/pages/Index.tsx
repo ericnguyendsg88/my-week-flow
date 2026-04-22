@@ -1,11 +1,10 @@
-import { useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useCallback, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import { addDays, format, isSunday, nextSunday, startOfDay } from "date-fns";
-import { CalendarDays, Inbox } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import { CalEvent } from "@/types/event";
 import { TaskComposer } from "@/components/TaskComposer";
 import { DayColumn } from "@/components/DayColumn";
-import { EventBubble } from "@/components/EventBubble";
 
 const Index = () => {
   const today = startOfDay(new Date());
@@ -31,16 +30,16 @@ const Index = () => {
     ];
   });
 
-  const [recent, setRecent] = useState<CalEvent[]>([]);
+  const [pickMode, setPickMode] = useState(false);
+  const [pickedSlot, setPickedSlot] = useState<{ date: string; start: number } | null>(null);
 
-  function handleCommit(e: CalEvent) {
-    setRecent((r) => [e, ...r].slice(0, 5));
-    // brief delay so user sees the bubble in the inbox before it flies into the grid
-    setTimeout(() => {
-      setEvents((prev) => [...prev, e]);
-      setRecent((r) => r.filter((x) => x.id !== e.id));
-    }, 450);
-  }
+  const handleCommit = useCallback((e: CalEvent) => {
+    setEvents((prev) => [...prev, e]);
+  }, []);
+
+  const handlePickSlot = useCallback((date: string, start: number) => {
+    setPickedSlot({ date, start });
+  }, []);
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-canvas">
@@ -64,42 +63,16 @@ const Index = () => {
 
       {/* Main split */}
       <div className="flex flex-1 gap-4 overflow-hidden px-6 pb-6">
-        {/* LEFT — Composer + Inbox (40%) */}
-        <aside className="flex w-[40%] min-w-[340px] max-w-[480px] flex-col gap-3 overflow-hidden">
-          <TaskComposer weekDates={weekDates} events={events} onCommit={handleCommit} />
-
-          <div className="flex items-center gap-2 px-1 pt-1">
-            <Inbox className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              In flight
-            </span>
-          </div>
-
-          <div className="flex-1 overflow-y-auto rounded-bubble bg-card/60 p-3 ring-1 ring-border/60 scrollbar-hidden">
-            <AnimatePresence>
-              {recent.length === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex h-full flex-col items-center justify-center gap-2 py-12 text-center"
-                >
-                  <div className="text-3xl">💭</div>
-                  <p className="max-w-[220px] text-xs font-medium text-muted-foreground">
-                    Free your mind. Drop a thought above and watch it find a home on your week.
-                  </p>
-                </motion.div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {recent.map((e) => (
-                    <div key={e.id} className="h-12">
-                      <EventBubble event={e} />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </AnimatePresence>
-            <Tips />
-          </div>
+        {/* LEFT — Composer occupies the full column (40%) */}
+        <aside className="flex w-[40%] min-w-[360px] max-w-[520px] flex-col overflow-hidden">
+          <TaskComposer
+            weekDates={weekDates}
+            events={events}
+            onCommit={handleCommit}
+            pickedSlot={pickedSlot}
+            onSlotPickModeChange={setPickMode}
+            onConsumePickedSlot={() => setPickedSlot(null)}
+          />
         </aside>
 
         {/* RIGHT — Week grid (60%) */}
@@ -111,6 +84,11 @@ const Index = () => {
               </h2>
               <p className="text-xs font-medium text-muted-foreground">
                 {format(weekDates[0], "EEE d")} → {format(weekDates[weekDates.length - 1], "EEE d")} · ends Sunday
+                {pickMode && (
+                  <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                    Click any slot to set the time
+                  </span>
+                )}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -129,6 +107,8 @@ const Index = () => {
                   events={events}
                   daysLeft={daysLeft}
                   isFirst={i === 0}
+                  pickMode={pickMode}
+                  onPickSlot={handlePickSlot}
                 />
               ))}
             </div>
@@ -172,26 +152,5 @@ function ViewChip({ label, active }: { label: string; active?: boolean }) {
   );
 }
 
-function Tips() {
-  return (
-    <div className="mt-4 space-y-1.5 px-1">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-        Try saying
-      </p>
-      {[
-        "Coffee with Alex Thursday",
-        "Deep work on Q2 plan 90m",
-        "Gym tomorrow morning",
-      ].map((s) => (
-        <div
-          key={s}
-          className="rounded-full bg-muted/60 px-3 py-1 text-[11px] font-medium text-muted-foreground"
-        >
-          “{s}”
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export default Index;
