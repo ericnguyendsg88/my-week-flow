@@ -36,7 +36,6 @@ function tagColors(tagId?: string): { bg: string; text: string; sub: string } {
   }
 }
 
-// ── tiny inline mini-calendar used in the edit panel ──────────────
 function EditMiniCal({ selected, onSelect }: { selected: string; onSelect: (d: string) => void }) {
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date(selected + "T00:00:00")));
   const days = eachDayOfInterval({
@@ -47,9 +46,9 @@ function EditMiniCal({ selected, onSelect }: { selected: string; onSelect: (d: s
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-        <button onClick={() => setViewMonth(m => subMonths(m, 1))} style={{ background: "none", border: "none", cursor: "pointer", color: "#7B73D6", fontSize: 16, padding: "0 6px" }}>‹</button>
+        <button type="button" onClick={() => setViewMonth(m => subMonths(m, 1))} style={{ background: "none", border: "none", cursor: "pointer", color: "#7B73D6", fontSize: 16, padding: "0 6px" }}>‹</button>
         <span style={{ fontSize: 11, fontWeight: 700, color: "#3C3489" }}>{format(viewMonth, "MMM yyyy")}</span>
-        <button onClick={() => setViewMonth(m => addMonths(m, 1))} style={{ background: "none", border: "none", cursor: "pointer", color: "#7B73D6", fontSize: 16, padding: "0 6px" }}>›</button>
+        <button type="button" onClick={() => setViewMonth(m => addMonths(m, 1))} style={{ background: "none", border: "none", cursor: "pointer", color: "#7B73D6", fontSize: 16, padding: "0 6px" }}>›</button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
         {["M","T","W","T","F","S","S"].map((d, i) => (
@@ -61,7 +60,7 @@ function EditMiniCal({ selected, onSelect }: { selected: string; onSelect: (d: s
           const isToday = key === todayStr;
           const inMonth = isSameMonth(day, viewMonth);
           return (
-            <button key={key} onClick={() => onSelect(key)} style={{
+            <button type="button" key={key} onClick={() => onSelect(key)} style={{
               padding: "4px 0", borderRadius: 5, fontSize: 10,
               fontWeight: isSel ? 700 : 400,
               background: isSel ? "#3C3489" : isToday ? "#EBE8FC" : "transparent",
@@ -76,14 +75,13 @@ function EditMiniCal({ selected, onSelect }: { selected: string; onSelect: (d: s
   );
 }
 
-// ── time slot picker (30-min grid) ────────────────────────────────
 function EditTimePicker({ selected, onSelect }: { selected: number; onSelect: (m: number) => void }) {
   const slots: number[] = [];
   for (let t = 7 * 60; t <= 22 * 60; t += 30) slots.push(t);
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 3, maxHeight: 150, overflowY: "auto" }} className="scrollbar-hidden">
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 3, maxHeight: 140, overflowY: "auto" }} className="scrollbar-hidden">
       {slots.map(t => (
-        <button key={t} onClick={() => onSelect(t)} style={{
+        <button type="button" key={t} onClick={() => onSelect(t)} style={{
           padding: "5px 2px", borderRadius: 6, fontSize: 10, fontWeight: 600,
           textAlign: "center", cursor: "pointer",
           background: selected === t ? "#3C3489" : "rgba(255,255,255,0.85)",
@@ -94,8 +92,6 @@ function EditTimePicker({ selected, onSelect }: { selected: number; onSelect: (m
     </div>
   );
 }
-
-type EditField = "title" | "date" | "time" | "duration" | "tag" | "location" | "people" | null;
 
 interface Props {
   event: CalEvent;
@@ -113,8 +109,8 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizin
   const [panelPos, setPanelPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const bubbleRef = useRef<HTMLDivElement>(null);
 
-  // edit state
-  const [editField, setEditField] = useState<EditField>(null);
+  // edit mode: all fields editable at once
+  const [editMode, setEditMode] = useState(false);
   const [editTitle, setEditTitle] = useState(event.title);
   const [editDate, setEditDate] = useState(event.date);
   const [editStart, setEditStart] = useState(event.start);
@@ -122,8 +118,9 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizin
   const [editTagId, setEditTagId] = useState(event.tagId ?? "");
   const [editLocation, setEditLocation] = useState(event.where ?? "");
   const [editPeople, setEditPeople] = useState(event.who ?? "");
+  // which sub-section is expanded inside edit mode
+  const [expandSection, setExpandSection] = useState<"date" | "time" | null>(null);
 
-  // reset edit state whenever the panel opens or event changes
   useEffect(() => {
     if (showDetail) {
       setEditTitle(event.title);
@@ -133,7 +130,8 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizin
       setEditTagId(event.tagId ?? "");
       setEditLocation(event.where ?? "");
       setEditPeople(event.who ?? "");
-      setEditField(null);
+      setEditMode(false);
+      setExpandSection(null);
     }
   }, [showDetail, event]);
 
@@ -161,8 +159,8 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizin
     e.stopPropagation();
     if (isResizing) return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const panelW = 280;
-    const panelH = 420;
+    const panelW = 360;
+    const panelH = 560;
     const x = rect.right + 12 + panelW > window.innerWidth
       ? rect.left - panelW - 12
       : rect.right + 12;
@@ -171,55 +169,53 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizin
     setShowDetail((v) => !v);
   }
 
-  function saveField(field: EditField) {
-    if (!onUpdate) { setEditField(null); return; }
-    switch (field) {
-      case "title":    onUpdate({ title: editTitle.trim() || event.title }); break;
-      case "date":     onUpdate({ date: editDate }); break;
-      case "time":     onUpdate({ start: editStart }); break;
-      case "duration": onUpdate({ duration: editDuration }); break;
-      case "tag":      onUpdate({ tagId: editTagId }); break;
-      case "location": onUpdate({ where: editLocation.trim() || undefined }); break;
-      case "people":   onUpdate({ who: editPeople.trim() || undefined }); break;
-    }
-    setEditField(null);
+  function saveAll() {
+    if (!onUpdate) { setEditMode(false); return; }
+    onUpdate({
+      title: editTitle.trim() || event.title,
+      date: editDate,
+      start: editStart,
+      duration: editDuration,
+      tagId: editTagId || undefined,
+      where: editLocation.trim() || undefined,
+      who: editPeople.trim() || undefined,
+    });
+    setEditMode(false);
+    setExpandSection(null);
   }
 
-  function EditRow({ label, field, display, children }: { label: string; field: EditField; display: React.ReactNode; children: React.ReactNode }) {
-    const isEditing = editField === field;
-    return (
-      <div style={{ marginBottom: 6 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 11, color: "#888", minWidth: 52, fontWeight: 500 }}>{label}</span>
-          <span style={{ fontSize: 12, fontWeight: 600, color: "#333", flex: 1 }}>{display}</span>
-          {onUpdate && (
-            <button
-              onClick={() => setEditField(isEditing ? null : field)}
-              style={{ background: isEditing ? "#3C3489" : "#F0EDEA", border: "none", borderRadius: 6, padding: "3px 6px", cursor: "pointer", color: isEditing ? "#fff" : "#888", display: "flex", alignItems: "center", flexShrink: 0 }}
-            >
-              <Pencil size={10} strokeWidth={2} />
-            </button>
-          )}
-        </div>
-        {isEditing && (
-          <div style={{ marginTop: 6, marginLeft: 60, background: "#F3F0FE", borderRadius: 10, padding: 10 }}>
-            {children}
-            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-              <button onClick={() => saveField(field)} style={{ flex: 1, background: "#3C3489", color: "#fff", border: "none", borderRadius: 8, padding: "6px 0", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
-              <button onClick={() => setEditField(null)} style={{ flex: 1, background: "#E8E5F0", color: "#666", border: "none", borderRadius: 8, padding: "6px 0", fontSize: 12, cursor: "pointer" }}>Cancel</button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
+  function cancelEdit() {
+    setEditTitle(event.title);
+    setEditDate(event.date);
+    setEditStart(event.start);
+    setEditDuration(event.duration);
+    setEditTagId(event.tagId ?? "");
+    setEditLocation(event.where ?? "");
+    setEditPeople(event.who ?? "");
+    setEditMode(false);
+    setExpandSection(null);
   }
 
-  const endMin = event.start + event.duration;
+  const endMin = editStart + editDuration;
+  const displayEndMin = event.start + event.duration;
   const dateLabel = (() => {
     try { return format(new Date(event.date + "T00:00:00"), "EEE, MMM d"); } catch { return event.date; }
   })();
+  const editDateLabel = (() => {
+    try { return format(new Date(editDate + "T00:00:00"), "EEE, MMM d"); } catch { return editDate; }
+  })();
 
-  const displayTag = tags ? getTag(tags, editTagId) : undefined;
+  const displayTag = tags ? getTag(tags, editMode ? editTagId : (event.tagId ?? "")) : undefined;
+
+  // ── Field row for view mode ──────────────────────────────────
+  function FieldRow({ label, value }: { label: string; value: React.ReactNode }) {
+    return (
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "5px 0", borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
+        <span style={{ fontSize: 11, color: "#AAA", minWidth: 56, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", flexShrink: 0 }}>{label}</span>
+        <span style={{ fontSize: 13, fontWeight: 500, color: "#222", lineHeight: 1.4 }}>{value}</span>
+      </div>
+    );
+  }
 
   const detailPanel = showDetail && createPortal(
     <>
@@ -236,201 +232,264 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizin
           position: "fixed",
           left: panelPos.x,
           top: panelPos.y,
-          width: 280,
+          width: 360,
           background: "#FAFAF8",
-          borderRadius: 18,
-          boxShadow: "0 20px 60px -8px rgba(0,0,0,0.22), 0 4px 16px -4px rgba(0,0,0,0.10)",
+          borderRadius: 20,
+          boxShadow: "0 24px 72px -8px rgba(0,0,0,0.24), 0 4px 20px -4px rgba(0,0,0,0.12)",
           border: "1px solid rgba(0,0,0,0.07)",
           zIndex: 999,
           overflow: "hidden",
-          maxHeight: "90vh",
-          overflowY: "auto",
+          maxHeight: "92vh",
+          display: "flex",
+          flexDirection: "column",
         }}
-        className="scrollbar-hidden"
       >
         {/* Color stripe */}
-        <div style={{ height: 6, background: bgColor }} />
+        <div style={{ height: 8, background: bgColor, flexShrink: 0 }} />
 
-        {/* Header — editable title */}
-        <div style={{ padding: "14px 16px 0", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-          {editField === "title" ? (
-            <div style={{ flex: 1, display: "flex", gap: 6 }}>
+        {/* Header */}
+        <div style={{ padding: "16px 18px 12px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexShrink: 0 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {editMode ? (
               <input
                 autoFocus
                 value={editTitle}
                 onChange={e => setEditTitle(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") saveField("title"); if (e.key === "Escape") setEditField(null); }}
-                style={{ flex: 1, fontSize: 14, fontWeight: 700, color: "#111", background: "#F3F0FE", border: "1.5px solid #7B73D6", borderRadius: 8, padding: "5px 8px", outline: "none" }}
+                onKeyDown={e => { if (e.key === "Escape") cancelEdit(); }}
+                style={{ width: "100%", fontSize: 17, fontWeight: 700, color: "#111", background: "#F3F0FE", border: "2px solid #7B73D6", borderRadius: 10, padding: "6px 10px", outline: "none", boxSizing: "border-box" }}
               />
-              <button onClick={() => saveField("title")} style={{ background: "#3C3489", color: "#fff", border: "none", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>✓</button>
-            </div>
-          ) : (
-            <h3
-              onClick={() => onUpdate && setEditField("title")}
-              style={{ fontSize: 15, fontWeight: 700, color: "#111", lineHeight: 1.3, flex: 1, cursor: onUpdate ? "text" : "default" }}
-              title={onUpdate ? "Click to edit title" : undefined}
-            >
-              {event.title}
-            </h3>
-          )}
-          <button
-            onClick={() => setShowDetail(false)}
-            style={{ background: "#F0EDEA", border: "none", borderRadius: 8, padding: 5, cursor: "pointer", color: "#888", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-          >
-            <X size={13} strokeWidth={2.5} />
-          </button>
-        </div>
-
-        {/* Info rows */}
-        <div style={{ padding: "12px 16px 10px" }}>
-          <EditRow label="date" field="date" display={dateLabel}>
-            <EditMiniCal selected={editDate} onSelect={d => setEditDate(d)} />
-          </EditRow>
-
-          <EditRow
-            label="time"
-            field="time"
-            display={<>{minutesToLabel(event.start)} → {minutesToLabel(endMin)} <span style={{ fontSize: 11, color: "#aaa", fontWeight: 400 }}>· {durationLabel(event.duration)}</span></>}
-          >
-            <EditTimePicker selected={editStart} onSelect={t => setEditStart(t)} />
-          </EditRow>
-
-          <EditRow label="duration" field="duration" display={durationLabel(event.duration)}>
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-              {DURATIONS.map(d => (
-                <button key={d} onClick={() => setEditDuration(d)} style={{
-                  padding: "5px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                  background: editDuration === d ? "#3C3489" : "#fff",
-                  color: editDuration === d ? "#fff" : "#3C3489",
-                  border: "1.5px solid " + (editDuration === d ? "#3C3489" : "rgba(123,115,214,0.25)"),
-                }}>{durationLabel(d)}</button>
-              ))}
-            </div>
-          </EditRow>
-
-          {tags && tags.length > 0 && (
-            <EditRow label="tag" field="tag" display={
-              displayTag
-                ? <span style={{ fontSize: 11, fontWeight: 700, background: tagColors(displayTag.id).bg, color: tagColors(displayTag.id).text, borderRadius: 12, padding: "2px 10px" }}>#{displayTag.name}</span>
-                : <span style={{ color: "#aaa", fontSize: 12 }}>none</span>
-            }>
-              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                {tags.map(t => {
-                  const tc = tagColors(t.id);
-                  return (
-                    <button key={t.id} onClick={() => setEditTagId(t.id)} style={{
-                      padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                      background: editTagId === t.id ? tc.text : tc.bg,
-                      color: editTagId === t.id ? "#fff" : tc.text,
-                      border: "none",
-                    }}>#{t.name}</button>
-                  );
-                })}
-              </div>
-            </EditRow>
-          )}
-
-          <EditRow label="where" field="location" display={event.where ? <span>📍 {event.where}</span> : <span style={{ color: "#bbb" }}>—</span>}>
-            <input
-              autoFocus
-              value={editLocation}
-              onChange={e => setEditLocation(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") saveField("location"); if (e.key === "Escape") setEditField(null); }}
-              placeholder="e.g. Coffee Lab, Zoom…"
-              style={{ width: "100%", background: "#fff", border: "1px solid rgba(123,115,214,0.3)", borderRadius: 8, padding: "6px 8px", fontSize: 12, color: "#3C3489", outline: "none", boxSizing: "border-box" }}
-            />
-          </EditRow>
-
-          <EditRow label="who" field="people" display={event.who ? <span>👥 {event.who}</span> : <span style={{ color: "#bbb" }}>—</span>}>
-            <input
-              autoFocus
-              value={editPeople}
-              onChange={e => setEditPeople(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") saveField("people"); if (e.key === "Escape") setEditField(null); }}
-              placeholder="e.g. Alice, the team…"
-              style={{ width: "100%", background: "#fff", border: "1px solid rgba(123,115,214,0.3)", borderRadius: 8, padding: "6px 8px", fontSize: 12, color: "#3C3489", outline: "none", boxSizing: "border-box" }}
-            />
-          </EditRow>
-
-          {(isCompleted || isSkipped) && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-              <span style={{ fontSize: 11, color: "#888", minWidth: 52, fontWeight: 500 }}>status</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: isCompleted ? "#27500A" : "#888", background: isCompleted ? "#D8F0B8" : "#EDEBE7", borderRadius: 12, padding: "2px 10px" }}>
-                {isCompleted ? "✓ done" : "✗ didn't happen"}
-              </span>
-            </div>
-          )}
-        </div>
-
-        <div style={{ height: 1, background: "#EDEBE7", margin: "0 16px" }} />
-
-        {/* Completion actions */}
-        {onMark && (
-          <div style={{ padding: "10px 16px", display: "flex", gap: 6 }}>
-            <button
-              onClick={() => { onMark(true); setShowDetail(false); }}
-              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: isCompleted ? "#C8E6A8" : "#EBF3D8", color: "#2E5513", border: isCompleted ? "2px solid #8DC86E" : "2px solid transparent", borderRadius: 12, padding: "8px 0", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-            >
-              <Check size={12} strokeWidth={2.5} /> Done
-            </button>
-            <button
-              onClick={() => { onMark(false); setShowDetail(false); }}
-              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: isSkipped ? "#DEDAD4" : "#F5F3F0", color: "#555", border: isSkipped ? "2px solid #B0ABA4" : "2px solid transparent", borderRadius: 12, padding: "8px 0", fontSize: 12, fontWeight: 500, cursor: "pointer" }}
-            >
-              <Ban size={12} strokeWidth={2} /> Skip
-            </button>
-            {event.completed != null && (
-              <button
-                onClick={() => { onMark(null); setShowDetail(false); }}
-                title="undo"
-                style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "#F5F3F0", color: "#999", border: "none", borderRadius: 12, padding: "8px 10px", fontSize: 12, cursor: "pointer" }}
-              >
-                <RotateCcw size={12} strokeWidth={2} />
-              </button>
+            ) : (
+              <h3 style={{ fontSize: 17, fontWeight: 700, color: "#111", lineHeight: 1.3, margin: 0 }}>{event.title}</h3>
+            )}
+            {!editMode && (
+              <p style={{ fontSize: 12, color: "#999", marginTop: 3, fontWeight: 400 }}>
+                {dateLabel} · {minutesToLabel(event.start)} → {minutesToLabel(displayEndMin)} · {durationLabel(event.duration)}
+              </p>
             )}
           </div>
-        )}
-
-        {/* Attached items */}
-        {(event.attachedItems?.length ?? 0) > 0 && (
-          <>
-            <div style={{ height: 1, background: "#EDEBE7", margin: "0 16px" }} />
-            <div style={{ padding: "8px 16px 4px" }}>
-              <p style={{ fontSize: 10, fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Attached</p>
-              {event.attachedItems!.map((att) => {
-                const Icon = KIND_ICON[att.kind] ?? Lightbulb;
-                const kc = KIND_COLORS[att.kind];
-                return (
-                  <div key={att.id} style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
-                    <span style={{ width: 18, height: 18, borderRadius: 5, background: kc.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <Icon size={10} color={kc.text} strokeWidth={2} />
-                    </span>
-                    <span style={{ fontSize: 11, fontWeight: 500, color: "#333", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{att.title}</span>
-                    {att.url && (
-                      <button onClick={() => window.open(att.url, "_blank")} style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "#aaa" }}>
-                        <ExternalLink size={10} />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        )}
-
-        <div style={{ height: 1, background: "#EDEBE7", margin: "0 16px" }} />
-
-        {/* Delete */}
-        {onDelete && (
-          <div style={{ padding: "10px 16px 14px" }}>
+          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+            {onUpdate && !editMode && (
+              <button
+                type="button"
+                onClick={() => setEditMode(true)}
+                style={{ display: "flex", alignItems: "center", gap: 5, background: "#EBE8FC", border: "none", borderRadius: 10, padding: "7px 12px", cursor: "pointer", color: "#3C3489", fontSize: 12, fontWeight: 600 }}
+              >
+                <Pencil size={12} strokeWidth={2.5} /> Edit
+              </button>
+            )}
             <button
-              onClick={() => { onDelete(); setShowDetail(false); }}
-              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#FEF0EE", color: "#C0392B", border: "1.5px solid #FACEC9", borderRadius: 12, padding: "8px 0", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "#FDDBD8")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "#FEF0EE")}
+              type="button"
+              onClick={() => setShowDetail(false)}
+              style={{ background: "#F0EDEA", border: "none", borderRadius: 10, padding: 7, cursor: "pointer", color: "#888", display: "flex", alignItems: "center", justifyContent: "center" }}
             >
-              <Trash2 size={13} strokeWidth={2} /> Delete event
+              <X size={14} strokeWidth={2.5} />
             </button>
+          </div>
+        </div>
+
+        {/* Scrollable body */}
+        <div style={{ flex: 1, overflowY: "auto" }} className="scrollbar-hidden">
+
+          {editMode ? (
+            /* ── EDIT MODE: all fields ── */
+            <div style={{ padding: "0 18px 12px" }}>
+
+              {/* Date */}
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#AAA", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>Date</label>
+                <button
+                  type="button"
+                  onClick={() => setExpandSection(s => s === "date" ? null : "date")}
+                  style={{ width: "100%", textAlign: "left", background: expandSection === "date" ? "#EBE8FC" : "#F5F3F0", border: "1.5px solid " + (expandSection === "date" ? "#7B73D6" : "transparent"), borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 600, color: "#3C3489", cursor: "pointer" }}
+                >
+                  {editDateLabel}
+                </button>
+                {expandSection === "date" && (
+                  <div style={{ marginTop: 6, background: "#F3F0FE", borderRadius: 12, padding: 10 }}>
+                    <EditMiniCal selected={editDate} onSelect={d => { setEditDate(d); setExpandSection(null); }} />
+                  </div>
+                )}
+              </div>
+
+              {/* Time */}
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#AAA", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>Start time</label>
+                <button
+                  type="button"
+                  onClick={() => setExpandSection(s => s === "time" ? null : "time")}
+                  style={{ width: "100%", textAlign: "left", background: expandSection === "time" ? "#EBE8FC" : "#F5F3F0", border: "1.5px solid " + (expandSection === "time" ? "#7B73D6" : "transparent"), borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 600, color: "#3C3489", cursor: "pointer" }}
+                >
+                  {minutesToLabel(editStart)} → {minutesToLabel(endMin)}
+                </button>
+                {expandSection === "time" && (
+                  <div style={{ marginTop: 6, background: "#F3F0FE", borderRadius: 12, padding: 10 }}>
+                    <EditTimePicker selected={editStart} onSelect={t => { setEditStart(t); setExpandSection(null); }} />
+                  </div>
+                )}
+              </div>
+
+              {/* Duration */}
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#AAA", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>Duration</label>
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  {DURATIONS.map(d => (
+                    <button type="button" key={d} onClick={() => setEditDuration(d)} style={{
+                      padding: "6px 12px", borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                      background: editDuration === d ? "#3C3489" : "#F5F3F0",
+                      color: editDuration === d ? "#fff" : "#3C3489",
+                      border: "1.5px solid " + (editDuration === d ? "#3C3489" : "rgba(123,115,214,0.22)"),
+                    }}>{durationLabel(d)}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tag */}
+              {tags && tags.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "#AAA", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>Tag</label>
+                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                    <button type="button" onClick={() => setEditTagId("")} style={{
+                      padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                      background: editTagId === "" ? "#555" : "#F0EDEA",
+                      color: editTagId === "" ? "#fff" : "#888",
+                      border: "none",
+                    }}>none</button>
+                    {tags.map(t => {
+                      const tc = tagColors(t.id);
+                      return (
+                        <button type="button" key={t.id} onClick={() => setEditTagId(t.id)} style={{
+                          padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                          background: editTagId === t.id ? tc.text : tc.bg,
+                          color: editTagId === t.id ? "#fff" : tc.text,
+                          border: "none",
+                        }}>#{t.name}</button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Location */}
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#AAA", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>Location</label>
+                <input
+                  value={editLocation}
+                  onChange={e => setEditLocation(e.target.value)}
+                  placeholder="e.g. Coffee Lab, Zoom…"
+                  style={{ width: "100%", background: "#F5F3F0", border: "1.5px solid rgba(123,115,214,0.22)", borderRadius: 10, padding: "8px 12px", fontSize: 13, color: "#3C3489", outline: "none", boxSizing: "border-box" }}
+                />
+              </div>
+
+              {/* People */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#AAA", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>People</label>
+                <input
+                  value={editPeople}
+                  onChange={e => setEditPeople(e.target.value)}
+                  placeholder="e.g. Alice, the team…"
+                  style={{ width: "100%", background: "#F5F3F0", border: "1.5px solid rgba(123,115,214,0.22)", borderRadius: 10, padding: "8px 12px", fontSize: 13, color: "#3C3489", outline: "none", boxSizing: "border-box" }}
+                />
+              </div>
+
+              {/* Save / Cancel */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="button" onClick={saveAll} style={{ flex: 1, background: "#3C3489", color: "#fff", border: "none", borderRadius: 12, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                  Save changes
+                </button>
+                <button type="button" onClick={cancelEdit} style={{ flex: 1, background: "#F0EDEA", color: "#666", border: "none", borderRadius: 12, padding: "10px 0", fontSize: 13, cursor: "pointer" }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+
+          ) : (
+            /* ── VIEW MODE ── */
+            <div style={{ padding: "0 18px 10px" }}>
+              <FieldRow label="Date" value={dateLabel} />
+              <FieldRow label="Time" value={<>{minutesToLabel(event.start)} → {minutesToLabel(displayEndMin)} <span style={{ fontSize: 11, color: "#bbb" }}>· {durationLabel(event.duration)}</span></>} />
+              {displayTag && <FieldRow label="Tag" value={<span style={{ fontSize: 12, fontWeight: 700, background: tagColors(displayTag.id).bg, color: tagColors(displayTag.id).text, borderRadius: 12, padding: "2px 10px" }}>#{displayTag.name}</span>} />}
+              {event.where && <FieldRow label="Where" value={<>📍 {event.where}</>} />}
+              {event.who && <FieldRow label="Who" value={<>👥 {event.who}</>} />}
+              {(isCompleted || isSkipped) && (
+                <FieldRow label="Status" value={
+                  <span style={{ fontSize: 12, fontWeight: 600, color: isCompleted ? "#27500A" : "#888", background: isCompleted ? "#D8F0B8" : "#EDEBE7", borderRadius: 12, padding: "2px 10px" }}>
+                    {isCompleted ? "✓ done" : "✗ didn't happen"}
+                  </span>
+                } />
+              )}
+
+              {/* Attached items */}
+              {(event.attachedItems?.length ?? 0) > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Attached</p>
+                  {event.attachedItems!.map((att) => {
+                    const Icon = KIND_ICON[att.kind] ?? Lightbulb;
+                    const kc = KIND_COLORS[att.kind];
+                    return (
+                      <div key={att.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, background: "#F5F3F0", borderRadius: 8, padding: "6px 8px" }}>
+                        <span style={{ width: 20, height: 20, borderRadius: 6, background: kc.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <Icon size={11} color={kc.text} strokeWidth={2} />
+                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 500, color: "#333", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{att.title}</span>
+                        {att.url && (
+                          <button type="button" onClick={() => window.open(att.url, "_blank")} style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "#aaa" }}>
+                            <ExternalLink size={11} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Bottom actions (Done / Skip / Delete) — always visible ── */}
+        {!editMode && (
+          <div style={{ flexShrink: 0, borderTop: "1px solid #EDEBE7" }}>
+            {onMark && (
+              <div style={{ padding: "12px 18px 8px", display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => { onMark(true); setShowDetail(false); }}
+                  style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: isCompleted ? "#C8E6A8" : "#EBF3D8", color: "#2E5513", border: isCompleted ? "2px solid #8DC86E" : "2px solid transparent", borderRadius: 12, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+                >
+                  <Check size={14} strokeWidth={2.5} /> Done
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { onMark(false); setShowDetail(false); }}
+                  style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: isSkipped ? "#DEDAD4" : "#F5F3F0", color: "#555", border: isSkipped ? "2px solid #B0ABA4" : "2px solid transparent", borderRadius: 12, padding: "10px 0", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                >
+                  <Ban size={14} strokeWidth={2} /> Skip
+                </button>
+                {event.completed != null && (
+                  <button
+                    type="button"
+                    onClick={() => { onMark(null); setShowDetail(false); }}
+                    title="Undo status"
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "#F5F3F0", color: "#999", border: "none", borderRadius: 12, padding: "10px 12px", cursor: "pointer" }}
+                  >
+                    <RotateCcw size={14} strokeWidth={2} />
+                  </button>
+                )}
+              </div>
+            )}
+
+            {onDelete && (
+              <div style={{ padding: "0 18px 16px" }}>
+                <button
+                  type="button"
+                  onClick={() => { onDelete(); setShowDetail(false); }}
+                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#FEF0EE", color: "#C0392B", border: "1.5px solid #FACEC9", borderRadius: 12, padding: "10px 0", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#FDDBD8")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "#FEF0EE")}
+                >
+                  <Trash2 size={14} strokeWidth={2} /> Delete event
+                </button>
+              </div>
+            )}
           </div>
         )}
       </motion.div>
