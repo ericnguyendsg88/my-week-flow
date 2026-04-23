@@ -1,25 +1,30 @@
-import { cn } from "@/lib/utils";
-
 interface Props {
   weekend?: boolean;
 }
 
 export function EmptyDayCard({ weekend }: Props) {
   return (
-    <div
-      className={cn(
-        "flex h-full w-full flex-col items-center justify-center rounded-2xl border border-dashed p-4 text-center",
-        weekend
-          ? "border-tag-green/40 bg-weekend-soft text-tag-green"
-          : "border-warm-gray/40 bg-warm-gray-soft/60 text-warm-gray"
-      )}
-    >
-      <div className="mb-2 text-2xl opacity-70">{weekend ? "🌿" : "✨"}</div>
-      <p className="text-[11px] font-bold leading-tight">
-        {weekend ? "open day" : "nothing yet"}
-      </p>
-      <p className="mt-1 text-[10px] font-medium leading-snug opacity-80">
-        {weekend ? "what restores you?" : "what do you want to do?"}
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      width: "100%",
+      height: "100%",
+      borderRadius: 8,
+      border: `1px dashed ${weekend ? "#9FE1CB" : "#D3D1C7"}`,
+      background: weekend ? "#E1F5EE" : "transparent",
+      padding: 12,
+      textAlign: "center",
+      boxSizing: "border-box",
+    }}>
+      <p style={{
+        fontSize: 11,
+        fontWeight: 500,
+        color: weekend ? "#085041" : "#888580",
+        lineHeight: 1.4,
+      }}>
+        {weekend ? "open day — what restores you?" : "nothing yet"}
       </p>
     </div>
   );

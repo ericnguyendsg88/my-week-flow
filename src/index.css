@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,87 +6,89 @@
 
 @layer base {
   :root {
-    --background: 40 30% 97%;
-    --foreground: 230 25% 18%;
+    /* Page */
+    --background: 240 5% 96%;        /* #F4F4F6 */
+    --foreground: 220 20% 14%;       /* near-black */
 
     --card: 0 0% 100%;
-    --card-foreground: 230 25% 18%;
+    --card-foreground: 220 20% 14%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 230 25% 18%;
+    --popover-foreground: 220 20% 14%;
 
-    --primary: 246 40% 50%;
+    /* Primary = blue from spec */
+    --primary: 213 80% 58%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 246 60% 70%;
+    --primary-glow: 213 90% 72%;
 
-    --secondary: 230 30% 96%;
-    --secondary-foreground: 230 25% 18%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 20% 14%;
 
-    --muted: 230 25% 94%;
-    --muted-foreground: 230 12% 48%;
+    --muted: 220 10% 92%;
+    --muted-foreground: 220 8% 52%;
 
-    --accent: 280 80% 70%;
+    --accent: 246 40% 50%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84% 65%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 230 25% 90%;
-    --input: 230 25% 92%;
-    --ring: 246 40% 50%;
+    --border: 220 12% 88%;
+    --border-tertiary: 220 10% 91%;
+    --input: 220 12% 90%;
+    --ring: 213 80% 58%;
 
     --radius: 1.25rem;
 
-    /* Category bubble colors (legacy, mapped to tags) */
-    --cat-work: 246 40% 50%;
-    --cat-work-soft: 246 60% 95%;
-    --cat-personal: 340 85% 65%;
-    --cat-personal-soft: 340 100% 96%;
-    --cat-health: 152 60% 48%;
-    --cat-health-soft: 152 70% 93%;
-    --cat-social: 32 95% 58%;
-    --cat-social-soft: 32 100% 94%;
-    --cat-focus: 175 55% 42%;
-    --cat-focus-soft: 175 60% 93%;
-    --cat-errand: 195 80% 52%;
-    --cat-errand-soft: 195 100% 94%;
+    /* ── Spec-exact event tag colours ── */
+    /* work → purple */
+    --tag-work-bg: #AFA9EC;
+    --tag-work-text: #3C3489;
+    /* deepwork → teal */
+    --tag-deepwork-bg: #9FE1CB;
+    --tag-deepwork-text: #085041;
+    /* study → blue */
+    --tag-study-bg: #B5D4F4;
+    --tag-study-text: #0C447C;
+    /* personal → pink */
+    --tag-personal-bg: #F4C0D1;
+    --tag-personal-text: #72243E;
+    /* social → amber */
+    --tag-social-bg: #FAC775;
+    --tag-social-text: #633806;
+    /* neutral */
+    --tag-neutral-bg: #D3D1C7;
+    --tag-neutral-text: #444441;
 
-    /* Tag palette — pastel, warm */
-    --tag-purple: 246 40% 50%;
-    --tag-purple-soft: 246 60% 95%;
-    --tag-teal: 175 55% 42%;
-    --tag-teal-soft: 175 60% 93%;
-    --tag-coral: 8 80% 65%;
-    --tag-coral-soft: 8 100% 95%;
-    --tag-pink: 340 80% 65%;
-    --tag-pink-soft: 340 100% 96%;
-    --tag-blue: 210 75% 55%;
-    --tag-blue-soft: 210 100% 95%;
-    --tag-green: 152 50% 45%;
-    --tag-green-soft: 152 60% 93%;
-    --tag-amber: 32 90% 55%;
-    --tag-amber-soft: 32 100% 94%;
-    --tag-gray: 230 10% 50%;
-    --tag-gray-soft: 230 20% 94%;
+    /* ── Backpack chip colours ── */
+    --chip-thought-bg: #EEEDFE;
+    --chip-thought-text: #3C3489;
+    --chip-link-bg: #E6F1FB;
+    --chip-link-text: #0C447C;
+    --chip-file-bg: #EAF3DE;
+    --chip-file-text: #27500A;
+    --chip-ref-bg: #FAEEDA;
+    --chip-ref-text: #633806;
+    --chip-task-bg: #FBEAF0;
+    --chip-task-text: #72243E;
 
-    /* Now marker (purple) */
+    /* ── Now marker ── */
     --now: 246 40% 50%;
     --now-halo: 246 60% 88%;
+    --now-line: #7B73D6;
+    --now-pill-bg: #7B73D6;
 
-    /* Warm gray for gap placeholders */
-    --warm-gray: 30 15% 60%;
-    --warm-gray-soft: 30 25% 95%;
+    /* ── Gap placeholder ── */
+    --gap-bg: #F1EFE8;
+    --gap-border: #D3D1C7;
+    --gap-text: #888580;
 
-    /* Weekend tint */
-    --weekend-soft: 152 50% 95%;
+    /* ── Weekend tint ── */
+    --weekend-bg: #E1F5EE;
+    --weekend-text: #085041;
 
-    --shadow-bubble: 0 8px 24px -8px hsl(246 40% 35% / 0.18), 0 2px 6px -2px hsl(246 30% 25% / 0.08);
-    --shadow-float: 0 24px 60px -18px hsl(246 40% 35% / 0.3);
-    --gradient-canvas: linear-gradient(180deg, hsl(40 40% 98%) 0%, hsl(246 30% 97%) 100%);
-    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary-glow)) 100%);
-    --gradient-sunrise: linear-gradient(135deg, hsl(32 95% 70%) 0%, hsl(340 80% 75%) 50%, hsl(246 50% 65%) 100%);
-
-    --transition-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --shadow-panel: 0 1px 3px rgba(0,0,0,0.06);
+    --shadow-bubble: 0 4px 16px -6px rgba(80,70,180,0.14), 0 1px 4px -2px rgba(80,70,180,0.07);
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -100,34 +102,43 @@
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
+  * { @apply border-border; }
 
-  html, body, #root {
-    height: 100%;
-  }
+  html, body, #root { height: 100%; overflow: hidden; }
 
   body {
-    @apply bg-background text-foreground;
-    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
-    background: var(--gradient-canvas);
-    font-feature-settings: 'cv11', 'ss01';
+    font-family: 'Inter', system-ui, sans-serif;
+    background-color: #F4F4F6;
+    color: hsl(var(--foreground));
     -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'cv11', 'ss01';
   }
 }
 
 @layer utilities {
-  .font-display {
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-    letter-spacing: -0.02em;
-  }
+  /* tag bg/text helpers using CSS vars */
+  .tag-work     { background: var(--tag-work-bg);     color: var(--tag-work-text); }
+  .tag-deepwork { background: var(--tag-deepwork-bg); color: var(--tag-deepwork-text); }
+  .tag-study    { background: var(--tag-study-bg);    color: var(--tag-study-text); }
+  .tag-personal { background: var(--tag-personal-bg); color: var(--tag-personal-text); }
+  .tag-social   { background: var(--tag-social-bg);   color: var(--tag-social-text); }
+  .tag-neutral  { background: var(--tag-neutral-bg);  color: var(--tag-neutral-text); }
+
+  /* accent left bar */
+  .tag-work-bar     { background: var(--tag-work-text); }
+  .tag-deepwork-bar { background: var(--tag-deepwork-text); }
+  .tag-study-bar    { background: var(--tag-study-text); }
+  .tag-personal-bar { background: var(--tag-personal-text); }
+  .tag-social-bar   { background: var(--tag-social-text); }
+  .tag-neutral-bar  { background: var(--tag-neutral-text); }
+
+  .shadow-panel  { box-shadow: var(--shadow-panel); }
   .shadow-bubble { box-shadow: var(--shadow-bubble); }
-  .shadow-float { box-shadow: var(--shadow-float); }
-  .bg-canvas { background: var(--gradient-canvas); }
-  .bg-gradient-primary { background: var(--gradient-primary); }
-  .bg-gradient-sunrise { background: var(--gradient-sunrise); }
 
   .scrollbar-hidden::-webkit-scrollbar { display: none; }
   .scrollbar-hidden { scrollbar-width: none; }
+
+  /* time grid */
+  .hour-line { border-top: 0.5px solid hsl(var(--border)); }
+  .col-divider { border-right: 0.5px solid hsl(var(--border)); }
 }
