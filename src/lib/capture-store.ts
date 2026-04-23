@@ -1,10 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
 import { CaptureItem, CaptureKind } from "@/types/event";
 
-let store: CaptureItem[] = [];
+const STORAGE_KEY = "horizon_backpack";
+
+function load(): CaptureItem[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw) as CaptureItem[];
+  } catch { /* ignore */ }
+  return [];
+}
+
+function save(items: CaptureItem[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  } catch { /* ignore */ }
+}
+
+let store: CaptureItem[] = load();
 const listeners = new Set<() => void>();
 
 function emit() {
+  save(store);
   listeners.forEach((l) => l());
 }
 
@@ -14,6 +31,7 @@ export function addCapture(input: {
   url?: string;
   tagId?: string;
   dayKey: string;
+  mealType?: import("@/types/event").MealType;
 }) {
   const item: CaptureItem = {
     id: crypto.randomUUID(),
@@ -28,6 +46,11 @@ export function addCapture(input: {
 
 export function removeCapture(id: string) {
   store = store.filter((c) => c.id !== id);
+  emit();
+}
+
+export function patchCapture(id: string, patch: Partial<CaptureItem>) {
+  store = store.map((c) => (c.id === id ? { ...c, ...patch } : c));
   emit();
 }
 
