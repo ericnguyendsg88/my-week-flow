@@ -1,7 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { format } from "date-fns";
+import { format, isToday, parseISO } from "date-fns";
 import { Lightbulb, Link2, FileText, Bookmark, Square, ExternalLink, X, Calendar, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { CalEvent, CaptureItem, CaptureKind, MealType } from "@/types/event";
@@ -374,6 +374,16 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
   const [placingItem, setPlacingItem] = useState<CaptureItem | null>(null);
   const [placeAnchor, setPlaceAnchor] = useState({ x: 0, y: 0 });
 
+  // Reset form whenever the selected day changes so items always go to the visible day
+  useEffect(() => {
+    setAdding(null);
+    setAddingMeal(null);
+    setDraftTitle("");
+    setDraftUrl("");
+    setMealText("");
+    setPlacingItem(null);
+  }, [selectedDayKey]);
+
   const committingRef = useRef(false);
   async function commitAdd() {
     if (!adding || !draftTitle.trim() || committingRef.current) return;
@@ -450,11 +460,27 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
     <div style={{ display: "flex", flexDirection: "column", gap: 0, height: "100%", overflow: "hidden" }}>
 
       {/* ── Header ─────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "hsl(var(--muted-foreground))" }}>
-          Backpack
-        </span>
-      </div>
+      {(() => {
+        const d = parseISO(selectedDayKey);
+        const itIsToday = isToday(d);
+        const dayLabel = itIsToday ? "today" : format(d, "EEE, MMM d");
+        return (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "hsl(var(--muted-foreground))" }}>
+              Backpack
+            </span>
+            <span style={{
+              fontSize: 10, fontWeight: 700, borderRadius: 20,
+              padding: "3px 9px",
+              background: itIsToday ? "#EDF6EB" : "#EEEDFE",
+              color: itIsToday ? "#1D5C17" : "#3C3489",
+              letterSpacing: "0.02em",
+            }}>
+              {dayLabel}
+            </span>
+          </div>
+        );
+      })()}
 
       {/* Quick-add chips — captures */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 8 }}>
