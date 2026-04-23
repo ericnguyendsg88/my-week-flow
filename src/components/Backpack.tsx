@@ -40,6 +40,18 @@ function kindMeta(k: CaptureKind) {
   return KINDS.find((x) => x.id === k) ?? KINDS[0];
 }
 
+function Timestamp({ ts, color }: { ts: number; color: string }) {
+  const d = new Date(ts);
+  const label = isToday(d)
+    ? format(d, "h:mm a").toLowerCase()
+    : format(d, "MMM d · h:mm a").toLowerCase();
+  return (
+    <span style={{ fontSize: 10, color, fontWeight: 500, whiteSpace: "nowrap", flexShrink: 0 }}>
+      {label}
+    </span>
+  );
+}
+
 // ── Shared action row ────────────────────────────────────────────
 function CardActions({ onPlace, onRemove, accent }: { onPlace: (e: React.MouseEvent<HTMLButtonElement>) => void; onRemove: () => void; accent: { bg: string; text: string } }) {
   return (
@@ -73,7 +85,7 @@ function ThoughtCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: 
       <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 7 }}>
         <Lightbulb size={11} color="#7B73D6" strokeWidth={2.2} />
         <span style={{ fontSize: 10, fontWeight: 700, color: "#9B91E0", textTransform: "uppercase", letterSpacing: "0.07em" }}>thought</span>
-        <span style={{ marginLeft: "auto", fontSize: 9, color: "#B0AAE8" }}>{format(item.createdAt, "h:mma").toLowerCase()}</span>
+        <span style={{ marginLeft: "auto" }}><Timestamp ts={item.createdAt} color="#B0AAE8" /></span>
       </div>
       <p style={{ fontSize: 13, fontWeight: 500, color: "#2E2870", lineHeight: 1.5, wordBreak: "break-word" }}>
         {item.title}
@@ -95,7 +107,7 @@ function TaskCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
           <p style={{ fontSize: 13, fontWeight: 600, color: "#4A1628", lineHeight: 1.45, wordBreak: "break-word" }}>
             {item.title}
           </p>
-          <span style={{ fontSize: 9, color: "#C0778A", marginTop: 3, display: "block" }}>{format(item.createdAt, "h:mma").toLowerCase()}</span>
+          <span style={{ marginTop: 3, display: "block" }}><Timestamp ts={item.createdAt} color="#C0778A" /></span>
         </div>
         <button onClick={onRemove} style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "#dbb", flexShrink: 0 }}>
           <X size={11} />
@@ -120,7 +132,7 @@ function RefCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e: 
         <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
           <Bookmark size={10} color="#C47A1E" strokeWidth={2.5} fill="#C47A1E" />
           <span style={{ fontSize: 9, fontWeight: 700, color: "#C47A1E", textTransform: "uppercase", letterSpacing: "0.07em" }}>ref</span>
-          <span style={{ marginLeft: "auto", fontSize: 9, color: "#D4A96A" }}>{format(item.createdAt, "h:mma").toLowerCase()}</span>
+          <span style={{ marginLeft: "auto" }}><Timestamp ts={item.createdAt} color="#D4A96A" /></span>
           <button onClick={onRemove} style={{ background: "none", border: "none", cursor: "pointer", padding: 1, color: "#ddd" }}><X size={10} /></button>
         </div>
         <p style={{ fontSize: 13, fontWeight: 600, color: "#4A2800", lineHeight: 1.4, wordBreak: "break-word" }}>
@@ -154,7 +166,7 @@ function FileCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 3 }}>
             <span style={{ fontSize: 9, fontWeight: 700, color: "#5C9440", textTransform: "uppercase", letterSpacing: "0.07em" }}>file</span>
-            <span style={{ marginLeft: "auto", fontSize: 9, color: "#8DBF76" }}>{format(item.createdAt, "h:mma").toLowerCase()}</span>
+            <span style={{ marginLeft: "auto" }}><Timestamp ts={item.createdAt} color="#8DBF76" /></span>
             <button onClick={onRemove} style={{ background: "none", border: "none", cursor: "pointer", padding: 1, color: "#ccc" }}><X size={10} /></button>
           </div>
           <p style={{ fontSize: 13, fontWeight: 600, color: "#1F4A10", lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -313,7 +325,7 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
         <span style={{ fontSize: 10, fontWeight: 700, color: "#3A6CB5", textTransform: "uppercase", letterSpacing: "0.06em", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {hostname || "link"}
         </span>
-        <span style={{ fontSize: 9, color: "#7AAAD4" }}>{format(item.createdAt, "h:mma").toLowerCase()}</span>
+        <Timestamp ts={item.createdAt} color="#7AAAD4" />
         <button type="button" onClick={onRemove} style={{ background: "none", border: "none", cursor: "pointer", padding: 1, color: "#aac" }}><X size={11} /></button>
       </div>
 
@@ -363,6 +375,10 @@ interface Props {
 export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCreateEventFromItem }: Props) {
   const allItems = useCaptures(selectedDayKey);
 
+  // Keep a ref always pointing to the current dayKey so async closures never capture stale values
+  const selectedDayKeyRef = useRef(selectedDayKey);
+  selectedDayKeyRef.current = selectedDayKey;
+
   const [adding, setAdding] = useState<CaptureKind | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftUrl, setDraftUrl] = useState("");
@@ -389,7 +405,9 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
     if (!adding || !draftTitle.trim() || committingRef.current) return;
     committingRef.current = true;
     const url = draftUrl.trim() || undefined;
-    const item = addCapture({ kind: adding, title: draftTitle.trim(), url, dayKey: selectedDayKey });
+    // use ref so the dayKey is always current even if state hasn't re-rendered yet
+    const dayKey = selectedDayKeyRef.current;
+    const item = addCapture({ kind: adding, title: draftTitle.trim(), url, dayKey });
     setAdding(null);
     setDraftTitle("");
     setDraftUrl("");
@@ -424,7 +442,7 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
 
   function commitMeal() {
     if (!addingMeal || !mealText.trim()) return;
-    addCapture({ kind: "meal", title: mealText.trim(), mealType: addingMeal, dayKey: selectedDayKey });
+    addCapture({ kind: "meal", title: mealText.trim(), mealType: addingMeal, dayKey: selectedDayKeyRef.current });
     setAddingMeal(null);
     setMealText("");
   }
