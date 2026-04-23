@@ -33,7 +33,7 @@ export function CategoryPicker({ value, onChange }: Props) {
             className={cn(
               "rounded-full px-3 py-1 text-xs font-semibold transition-all",
               active
-                ? `${cls.solid} text-white shadow-bubble`
+                ? `${cls.solid} text-primary-foreground shadow-bubble`
                 : `${cls.bg} ${cls.text} hover:ring-2 ${cls.ring}`
             )}
           >
