@@ -7,13 +7,15 @@ import {
   Users,
   Clock,
   Calendar as CalIcon,
-  Tag,
+  Tag as TagIcon,
   ArrowLeft,
   CornerDownLeft,
   MousePointerClick,
+  Plus,
 } from "lucide-react";
-import { CalEvent, Category, CATEGORIES, DURATIONS } from "@/types/event";
+import { CalEvent, Category, CATEGORIES, DURATIONS, Tag, TagColor } from "@/types/event";
 import { getCategoryClasses } from "./CategoryPicker";
+import { TAG_COLORS, TAG_CLASSES, tagClasses, getTag, tagForCategory } from "@/lib/tags";
 import {
   durationLabel,
   findConflicts,
@@ -27,22 +29,25 @@ import { cn } from "@/lib/utils";
 interface Props {
   weekDates: Date[];
   events: CalEvent[];
+  tags: Tag[];
   onCommit: (e: CalEvent) => void;
-  /** Slot picked on the calendar grid (date + minutes since midnight). */
+  onCreateTag: (t: Omit<Tag, "id">) => Tag;
   pickedSlot?: { date: string; start: number } | null;
-  /** Called when composer enters / exits "pick on calendar" mode. */
   onSlotPickModeChange?: (active: boolean) => void;
-  /** Clear the picked slot from parent after consuming it. */
   onConsumePickedSlot?: () => void;
+  /** Optionally pre-fill the composer (e.g. when "place" is clicked in Backpack) */
+  prefillTitle?: string | null;
+  onConsumePrefill?: () => void;
 }
 
-type Step = "title" | "category" | "day" | "duration" | "time" | "where" | "who" | "confirm";
+type Step = "title" | "tag" | "day" | "duration" | "time" | "where" | "who" | "confirm";
 
-const STEPS: Step[] = ["title", "category", "day", "duration", "time", "where", "who", "confirm"];
+const STEPS: Step[] = ["title", "tag", "day", "duration", "time", "where", "who", "confirm"];
 
 interface Draft {
   title: string;
   category: Category;
+  tagId: string;
   date: string;
   start: number;
   duration: number;
@@ -53,10 +58,14 @@ interface Draft {
 export function TaskComposer({
   weekDates,
   events,
+  tags,
   onCommit,
+  onCreateTag,
   pickedSlot,
   onSlotPickModeChange,
   onConsumePickedSlot,
+  prefillTitle,
+  onConsumePrefill,
 }: Props) {
   const [step, setStep] = useState<Step>("title");
   const [text, setText] = useState("");
@@ -66,18 +75,15 @@ export function TaskComposer({
   const [pickMode, setPickMode] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Focus the right input on every step change
   useEffect(() => {
     const id = setTimeout(() => inputRef.current?.focus(), 30);
     return () => clearTimeout(id);
   }, [step]);
 
-  // Tell parent when slot-pick mode toggles
   useEffect(() => {
     onSlotPickModeChange?.(pickMode);
   }, [pickMode, onSlotPickModeChange]);
 
-  // Consume slot from calendar pick
   useEffect(() => {
     if (pickedSlot && draft && pickMode) {
       setDraft({ ...draft, date: pickedSlot.date, start: pickedSlot.start });
@@ -87,6 +93,15 @@ export function TaskComposer({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickedSlot]);
+
+  // Receive prefilled title (from Backpack "place →")
+  useEffect(() => {
+    if (prefillTitle && step === "title") {
+      setText(prefillTitle);
+      onConsumePrefill?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillTitle]);
 
   const conflicts = useMemo(() => {
     if (!draft) return [];
@@ -109,8 +124,9 @@ export function TaskComposer({
     const duration = guessDuration(text);
     const date = format(weekDates[0], "yyyy-MM-dd");
     const start = suggestStart(events, date, duration);
-    setDraft({ title: text.trim(), category, date, start, duration });
-    setStep("category");
+    const tagId = tagForCategory(category);
+    setDraft({ title: text.trim(), category, tagId, date, start, duration });
+    setStep("tag");
   }
 
   function reset() {
@@ -135,7 +151,6 @@ export function TaskComposer({
 
   return (
     <div className="flex h-full flex-col rounded-bubble bg-card p-5 shadow-bubble ring-1 ring-border">
-      {/* Header strip */}
       <div className="mb-4 flex items-center justify-between">
         <StepCrumbs current={step} />
         {step !== "title" && (
@@ -148,12 +163,8 @@ export function TaskComposer({
         )}
       </div>
 
-      {/* Active draft chip */}
-      {draft && step !== "title" && (
-        <DraftChip draft={draft} />
-      )}
+      {draft && step !== "title" && <DraftChip draft={draft} tags={tags} />}
 
-      {/* Step body — fills remaining column */}
       <div className="relative flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div
@@ -173,15 +184,21 @@ export function TaskComposer({
               />
             )}
 
-            {step === "category" && draft && (
-              <CategoryStep
+            {step === "tag" && draft && (
+              <TagStep
                 inputRef={inputRef}
                 draft={draft}
-                onPick={(c) => {
-                  setDraft({ ...draft, category: c });
-                  goNext("category");
+                tags={tags}
+                onPick={(tagId) => {
+                  setDraft({ ...draft, tagId });
+                  goNext("tag");
                 }}
-                onSkip={() => goNext("category")}
+                onCreate={(t) => {
+                  const created = onCreateTag(t);
+                  setDraft({ ...draft, tagId: created.id });
+                  goNext("tag");
+                }}
+                onSkip={() => goNext("tag")}
               />
             )}
 
@@ -258,6 +275,7 @@ export function TaskComposer({
               <ConfirmStep
                 inputRef={inputRef}
                 draft={{ ...draft, where: whereText || draft.where, who: whoText || draft.who }}
+                tags={tags}
                 conflicts={conflicts}
                 onCommit={commit}
                 onCancel={reset}
@@ -267,7 +285,6 @@ export function TaskComposer({
         </AnimatePresence>
       </div>
 
-      {/* Footer keyboard hints */}
       <KeyboardHints step={step} />
     </div>
   );
@@ -304,7 +321,7 @@ function TitleStep({
       />
       <div className="mt-3 h-[3px] w-12 rounded-full bg-gradient-primary" />
       <p className="mt-6 max-w-sm text-xs font-medium text-muted-foreground">
-        Just type the thought. We'll walk through type, day, duration & time —
+        Just type the thought. We'll walk through tag, day, duration & time —
         one keystroke at a time.
       </p>
     </div>
@@ -395,7 +412,6 @@ function NumberedOption({
 function useNumberKeys(onNumber: (n: number) => void, onSkip: () => void, onBack?: () => void) {
   useEffect(() => {
     function handler(e: KeyboardEvent) {
-      // Ignore when typing inside a real text input
       const tag = (e.target as HTMLElement)?.tagName;
       const editable = tag === "INPUT" || tag === "TEXTAREA";
       if (editable) return;
@@ -417,44 +433,118 @@ function useNumberKeys(onNumber: (n: number) => void, onSkip: () => void, onBack
   }, [onNumber, onSkip, onBack]);
 }
 
-function CategoryStep({
+function TagStep({
   draft,
+  tags,
   onPick,
+  onCreate,
   onSkip,
   inputRef,
 }: {
   draft: Draft;
-  onPick: (c: Category) => void;
+  tags: Tag[];
+  onPick: (tagId: string) => void;
+  onCreate: (t: Omit<Tag, "id">) => void;
   onSkip: () => void;
   inputRef: React.RefObject<HTMLInputElement>;
 }) {
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [color, setColor] = useState<TagColor>("purple");
+
   useNumberKeys(
     (n) => {
-      const c = CATEGORIES[n - 1];
-      if (c) onPick(c.id);
+      if (creating) return;
+      const t = tags[n - 1];
+      if (t) onPick(t.id);
     },
     onSkip
   );
+
   return (
-    <StepShell icon={<Tag className="h-3.5 w-3.5" />} title="What kind of thing?" subtitle="Type">
-      {/* hidden focus target so global keys feel snappy */}
+    <StepShell icon={<TagIcon className="h-3.5 w-3.5" />} title="Tag it" subtitle="Tag">
       <input ref={inputRef} className="sr-only" aria-hidden tabIndex={-1} />
-      <div className="flex flex-col gap-1.5">
-        {CATEGORIES.map((c, i) => {
-          const cls = getCategoryClasses(c.id);
-          return (
-            <NumberedOption
-              key={c.id}
-              index={i + 1}
-              label={`${c.emoji}  ${c.label}`}
-              sublabel={c.id === draft.category ? "Suggested from your text" : undefined}
-              active={draft.category === c.id}
-              swatch={<span className={cn("h-2.5 w-2.5 rounded-full", cls.solid)} />}
-              onClick={() => onPick(c.id)}
-            />
-          );
-        })}
-      </div>
+
+      {!creating && (
+        <div className="flex flex-col gap-1.5">
+          {tags.map((t, i) => {
+            const cls = tagClasses(t);
+            return (
+              <NumberedOption
+                key={t.id}
+                index={i + 1}
+                label={`#${t.name}`}
+                sublabel={t.id === draft.tagId ? "Suggested" : undefined}
+                active={draft.tagId === t.id}
+                swatch={<span className={cn("h-2.5 w-2.5 rounded-full", cls.solid)} />}
+                onClick={() => onPick(t.id)}
+              />
+            );
+          })}
+
+          <button
+            onClick={() => setCreating(true)}
+            className="mt-1 flex w-full items-center gap-3 rounded-2xl border border-dashed border-border px-3 py-2.5 text-left text-muted-foreground hover:bg-muted/50"
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-card font-mono text-xs font-bold ring-1 ring-border">
+              N
+            </span>
+            <Plus className="h-4 w-4" />
+            <span className="text-sm font-bold">New tag</span>
+          </button>
+        </div>
+      )}
+
+      {creating && (
+        <div className="rounded-2xl bg-muted/40 p-3 ring-1 ring-border">
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+            New tag
+          </p>
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && name.trim()) {
+                onCreate({ name: name.trim(), color });
+              }
+            }}
+            placeholder="tag name…"
+            className="w-full bg-transparent text-lg font-extrabold outline-none placeholder:text-muted-foreground/50"
+          />
+          <div className="mt-3 grid grid-cols-8 gap-1.5">
+            {TAG_COLORS.map((c) => {
+              const cls = TAG_CLASSES[c];
+              return (
+                <button
+                  key={c}
+                  onClick={() => setColor(c)}
+                  className={cn(
+                    "h-7 w-7 rounded-full ring-2 transition-all",
+                    cls.solid,
+                    color === c ? "ring-foreground" : "ring-transparent hover:ring-border"
+                  )}
+                  aria-label={c}
+                />
+              );
+            })}
+          </div>
+          <div className="mt-3 flex gap-1.5">
+            <button
+              onClick={() => name.trim() && onCreate({ name: name.trim(), color })}
+              className="rounded-full bg-foreground px-3 py-1.5 text-[11px] font-bold text-background"
+            >
+              Create
+            </button>
+            <button
+              onClick={() => setCreating(false)}
+              className="rounded-full px-2 py-1.5 text-[11px] font-bold text-muted-foreground hover:bg-muted"
+            >
+              cancel
+            </button>
+          </div>
+        </div>
+      )}
     </StepShell>
   );
 }
@@ -561,7 +651,6 @@ function TimeStep({
   onSkip: () => void;
   inputRef: React.RefObject<HTMLInputElement>;
 }) {
-  // Build 4 smart suggestions around the current draft.start
   const suggestions = useMemo(() => {
     const base = [draft.start, 9 * 60, 13 * 60, 16 * 60];
     return Array.from(new Set(base)).slice(0, 4);
@@ -603,12 +692,11 @@ function PickOnCalendarButton({ active, onClick }: { active: boolean; onClick: (
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
       className={cn(
-        "mt-1 flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left ring-1 transition-all",
+        "mt-1 flex w-full items-center gap-3 rounded-2xl border border-dashed px-3 py-2.5 text-left transition-all",
         active
-          ? "bg-primary/10 text-primary ring-primary/40"
-          : "bg-transparent text-muted-foreground ring-dashed ring-border hover:bg-muted/50"
+          ? "border-primary/40 bg-primary/10 text-primary"
+          : "border-border bg-transparent text-muted-foreground hover:bg-muted/50"
       )}
-      style={{ borderStyle: "dashed" }}
     >
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-card font-mono text-xs font-bold ring-1 ring-border">
         C
@@ -671,12 +759,14 @@ function TextStep({
 
 function ConfirmStep({
   draft,
+  tags,
   conflicts,
   onCommit,
   onCancel,
   inputRef,
 }: {
   draft: Draft;
+  tags: Tag[];
   conflicts: CalEvent[];
   onCommit: () => void;
   onCancel: () => void;
@@ -694,7 +784,8 @@ function ConfirmStep({
     return () => window.removeEventListener("keydown", handler);
   }, [onCommit, onCancel]);
 
-  const cls = getCategoryClasses(draft.category);
+  const tag = getTag(tags, draft.tagId);
+  const cls = tag ? tagClasses(tag) : getCategoryClasses(draft.category);
   return (
     <div className="flex h-full flex-col">
       <input ref={inputRef} className="sr-only" aria-hidden tabIndex={-1} />
@@ -709,6 +800,11 @@ function ConfirmStep({
           {minutesToLabel(draft.start)} – {minutesToLabel(draft.start + draft.duration)} ·{" "}
           {durationLabel(draft.duration)}
         </p>
+        {tag && (
+          <span className={cn("mt-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold text-primary-foreground", cls.solid)}>
+            #{tag.name}
+          </span>
+        )}
         {(draft.where || draft.who) && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {draft.where && (
@@ -760,7 +856,7 @@ function ConfirmStep({
 function StepCrumbs({ current }: { current: Step }) {
   const order: { id: Step; label: string }[] = [
     { id: "title", label: "Idea" },
-    { id: "category", label: "Type" },
+    { id: "tag", label: "Tag" },
     { id: "day", label: "Day" },
     { id: "duration", label: "Length" },
     { id: "time", label: "Time" },
@@ -788,14 +884,16 @@ function StepCrumbs({ current }: { current: Step }) {
   );
 }
 
-function DraftChip({ draft }: { draft: Draft }) {
-  const cls = getCategoryClasses(draft.category);
+function DraftChip({ draft, tags }: { draft: Draft; tags: Tag[] }) {
+  const tag = getTag(tags, draft.tagId);
+  const cls = tag ? tagClasses(tag) : getCategoryClasses(draft.category);
   return (
     <div className={cn("mb-4 rounded-2xl px-3 py-2 ring-1", cls.bg, cls.ring)}>
       <p className={cn("truncate text-sm font-extrabold", cls.text)}>{draft.title}</p>
       <p className="text-[10px] font-semibold text-foreground/60">
         {format(new Date(draft.date + "T00:00:00"), "EEE MMM d")} · {minutesToLabel(draft.start)} ·{" "}
         {durationLabel(draft.duration)}
+        {tag && <> · #{tag.name}</>}
       </p>
     </div>
   );

@@ -26,6 +26,7 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          glow: "hsl(var(--primary-glow))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -69,6 +70,27 @@ export default {
           focus: { DEFAULT: "hsl(var(--cat-focus))", soft: "hsl(var(--cat-focus-soft))" },
           errand: { DEFAULT: "hsl(var(--cat-errand))", soft: "hsl(var(--cat-errand-soft))" },
         },
+        tag: {
+          purple: { DEFAULT: "hsl(var(--tag-purple))", soft: "hsl(var(--tag-purple-soft))" },
+          teal: { DEFAULT: "hsl(var(--tag-teal))", soft: "hsl(var(--tag-teal-soft))" },
+          coral: { DEFAULT: "hsl(var(--tag-coral))", soft: "hsl(var(--tag-coral-soft))" },
+          pink: { DEFAULT: "hsl(var(--tag-pink))", soft: "hsl(var(--tag-pink-soft))" },
+          blue: { DEFAULT: "hsl(var(--tag-blue))", soft: "hsl(var(--tag-blue-soft))" },
+          green: { DEFAULT: "hsl(var(--tag-green))", soft: "hsl(var(--tag-green-soft))" },
+          amber: { DEFAULT: "hsl(var(--tag-amber))", soft: "hsl(var(--tag-amber-soft))" },
+          gray: { DEFAULT: "hsl(var(--tag-gray))", soft: "hsl(var(--tag-gray-soft))" },
+        },
+        now: {
+          DEFAULT: "hsl(var(--now))",
+          halo: "hsl(var(--now-halo))",
+        },
+        "warm-gray": {
+          DEFAULT: "hsl(var(--warm-gray))",
+          soft: "hsl(var(--warm-gray-soft))",
+        },
+        weekend: {
+          soft: "hsl(var(--weekend-soft))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -79,25 +101,22 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+        "fade-in": {
+          "0%": { opacity: "0", transform: "translateY(6px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "fade-in": "fade-in 0.3s ease-out",
       },
     },
   },
