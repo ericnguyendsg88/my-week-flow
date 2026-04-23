@@ -181,6 +181,13 @@ const Index = () => {
     dispatch({ type: "PUSH", events: events.map((e) => e.id === eventId ? { ...e, ...patch } : e) });
   }, [events]);
 
+  const handleMoveToDay = useCallback((eventId: string, newDate: string) => {
+    const ev = events.find((e) => e.id === eventId);
+    if (!ev || ev.date === newDate) return;
+    dispatch({ type: "PUSH", events: events.map((e) => e.id === eventId ? { ...e, date: newDate } : e) });
+    showToast(`Moved to ${newDate}`);
+  }, [events]);
+
   const handleAttachToEvent = useCallback((eventId: string, item: import("@/types/event").CaptureItem) => {
     dispatch({
       type: "PUSH",
@@ -426,7 +433,11 @@ const Index = () => {
             onDelete={handleDelete}
             onResize={handleResize}
             onUpdate={handleUpdate}
+            onCreate={handleCommit}
+            onMoveToDay={handleMoveToDay}
             focusMode={viewMode === "today"}
+            selectedDayKey={selectedDayKey}
+            onDayClick={setSelectedDate}
           />
         </div>
       </div>
@@ -510,7 +521,7 @@ const Index = () => {
 };
 
 /* ── Week Grid ── */
-function WeekGrid({ weekDates, events, tags, onMark, onDelete, onResize, onUpdate, focusMode }: {
+function WeekGrid({ weekDates, events, tags, onMark, onDelete, onResize, onUpdate, onCreate, onMoveToDay, focusMode, selectedDayKey, onDayClick }: {
   weekDates: Date[];
   events: CalEvent[];
   tags: Tag[];
@@ -518,7 +529,11 @@ function WeekGrid({ weekDates, events, tags, onMark, onDelete, onResize, onUpdat
   onDelete: (eventId: string) => void;
   onResize: (eventId: string, newDuration: number) => void;
   onUpdate: (eventId: string, patch: Partial<CalEvent>) => void;
+  onCreate: (event: CalEvent) => void;
+  onMoveToDay: (eventId: string, newDate: string) => void;
   focusMode?: boolean;
+  selectedDayKey?: string;
+  onDayClick?: (date: Date) => void;
 }) {
   const START_HOUR = 7;
   const END_HOUR = 22;
@@ -539,7 +554,11 @@ function WeekGrid({ weekDates, events, tags, onMark, onDelete, onResize, onUpdat
               onDelete={onDelete}
               onResize={onResize}
               onUpdate={onUpdate}
+              onCreate={onCreate}
+              onMoveToDay={onMoveToDay}
               focusMode={focusMode}
+              isSelected={dateKey === selectedDayKey}
+              onDayClick={onDayClick}
             />
           );
         })}
