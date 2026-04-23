@@ -25,6 +25,16 @@ export interface Tag {
   color: TagColor;
 }
 
+export type CaptureKind = "thought" | "link" | "file" | "ref" | "task" | "meal";
+export type MealType = "breakfast" | "lunch" | "dinner";
+
+export interface AttachedItem {
+  id: string;
+  kind: CaptureKind;
+  title: string;
+  url?: string;
+}
+
 export interface CalEvent {
   id: string;
   title: string;
@@ -38,9 +48,9 @@ export interface CalEvent {
   duration: number;
   where?: string;
   who?: string;
+  completed?: boolean | null;
+  attachedItems?: AttachedItem[];
 }
-
-export type CaptureKind = "thought" | "link" | "file" | "ref" | "task";
 
 export interface CaptureItem {
   id: string;
@@ -51,6 +61,13 @@ export interface CaptureItem {
   createdAt: number;
   dayKey: string;
   placed?: boolean;
+  mealType?: MealType;
+  // link preview metadata
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
+  ogSite?: string;
+  ogLoading?: boolean;
 }
 
 export const DURATIONS = [15, 30, 45, 60, 90, 120];
