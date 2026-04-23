@@ -132,6 +132,52 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
     document.addEventListener("mouseup", onUp);
   }
 
+  // ── within-day move drag ──
+  const [movingId, setMovingId] = useState<string | null>(null);
+  const [liveStart, setLiveStart] = useState<number>(0);
+  const moveDragRef = useRef<{ startY: number; origStart: number } | null>(null);
+
+  function handleEventMoveMouseDown(ev: React.MouseEvent, event: CalEvent) {
+    // only trigger on the bubble body, not on resize handle
+    if ((ev.target as HTMLElement).closest("[data-resize-handle]")) return;
+    // don't preventDefault yet — let click events pass through if no real drag
+    ev.stopPropagation();
+
+    const startY = ev.clientY;
+    let dragging = false;
+    moveDragRef.current = { startY, origStart: event.start };
+
+    function onMove(e: MouseEvent) {
+      if (!moveDragRef.current) return;
+      const delta = e.clientY - moveDragRef.current.startY;
+      if (!dragging && Math.abs(delta) < 5) return; // dead zone before drag activates
+      if (!dragging) {
+        dragging = true;
+        setMovingId(event.id);
+        setLiveStart(event.start);
+      }
+      const newStart = snapStart(moveDragRef.current.origStart + delta);
+      const clamped = Math.max(7 * 60, Math.min(22 * 60 - event.duration, newStart));
+      setLiveStart(clamped);
+    }
+
+    function onUp(e: MouseEvent) {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      if (dragging && moveDragRef.current) {
+        const delta = e.clientY - moveDragRef.current.startY;
+        const newStart = snapStart(moveDragRef.current.origStart + delta);
+        const clamped = Math.max(7 * 60, Math.min(22 * 60 - event.duration, newStart));
+        if (clamped !== moveDragRef.current.origStart) onUpdate?.(event.id, { start: clamped });
+      }
+      moveDragRef.current = null;
+      setMovingId(null);
+    }
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+
   // ── cross-day drop target state ──
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -487,24 +533,28 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
         {/* Events */}
         {sorted.map((ev) => {
           const isResizing = resizingId === ev.id;
+          const isMoving = movingId === ev.id;
           const displayDuration = isResizing ? liveDuration : ev.duration;
+          const displayStart = isMoving ? liveStart : ev.start;
           return (
             <div
               key={ev.id}
               data-event="true"
-              draggable={!!onMoveToDay}
+              draggable={!!onMoveToDay && !isMoving}
               onDragStart={(e) => {
                 e.dataTransfer.setData("text/event-id", ev.id);
                 e.dataTransfer.effectAllowed = "move";
               }}
+              onMouseDown={(e) => handleEventMoveMouseDown(e, ev)}
               style={{
                 position: "absolute",
-                top: timeToY(ev.start),
+                top: timeToY(displayStart),
                 left: 0, right: 0,
                 height: Math.max(displayDuration, 76),
-                zIndex: isResizing ? 15 : 10,
-                transition: isResizing ? "none" : undefined,
-                cursor: onMoveToDay ? "grab" : "default",
+                zIndex: isResizing ? 15 : isMoving ? 16 : 10,
+                transition: (isResizing || isMoving) ? "none" : undefined,
+                cursor: isMoving ? "grabbing" : "grab",
+                opacity: isMoving ? 0.85 : 1,
               }}
             >
               <EventBubble
@@ -513,12 +563,32 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
                 onMark={onMark ? (c) => onMark(ev.id, c) : undefined}
                 onDelete={onDelete ? () => onDelete(ev.id) : undefined}
                 onUpdate={onUpdate ? (patch) => onUpdate(ev.id, patch) : undefined}
-                isResizing={isResizing}
+                isResizing={isResizing || isMoving}
               />
+
+              {/* Live time tooltip while moving */}
+              {isMoving && (
+                <div style={{
+                  position: "absolute",
+                  top: 6, right: 8,
+                  background: "#3C3489",
+                  color: "#fff",
+                  fontSize: 10,
+                  fontWeight: 600,
+                  borderRadius: 6,
+                  padding: "2px 7px",
+                  pointerEvents: "none",
+                  zIndex: 25,
+                  whiteSpace: "nowrap",
+                }}>
+                  {minutesToLabel(liveStart)}
+                </div>
+              )}
 
               {/* Resize handle */}
               {onResize && (
                 <div
+                  data-resize-handle="true"
                   onMouseDown={(e) => handleResizeMouseDown(e, ev)}
                   style={{
                     position: "absolute",
@@ -545,7 +615,7 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
               )}
 
               {/* Live duration tooltip while resizing */}
-              {isResizing && (
+              {isResizing && !isMoving && (
                 <div style={{
                   position: "absolute",
                   bottom: 14, right: 8,
