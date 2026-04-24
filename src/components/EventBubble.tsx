@@ -268,6 +268,13 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizin
             )}
           </div>
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+            {/* Google Calendar badge — editable locally */}
+            {event.source === "google" && !editMode && (
+              <span style={{ display: "flex", alignItems: "center", gap: 4, background: "#F0F6FF", border: "1px solid #C5D9F5", borderRadius: 10, padding: "5px 10px", fontSize: 11, fontWeight: 600, color: "#3A6CB5", flexShrink: 0 }}>
+                <svg width="10" height="10" viewBox="0 0 488 512" fill="currentColor"><path d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"/></svg>
+                Google
+              </span>
+            )}
             {onUpdate && !editMode && (
               <button
                 type="button"

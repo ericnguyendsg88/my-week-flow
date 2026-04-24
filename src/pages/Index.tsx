@@ -228,6 +228,73 @@ const Index = () => {
     return h < 12 ? "morning" : h < 17 ? "afternoon" : "evening";
   })();
 
+  // ── Live clock ──
+  const [nowTime, setNowTime] = useState(() => format(new Date(), "h:mma").toLowerCase());
+  useEffect(() => {
+    const tick = () => setNowTime(format(new Date(), "h:mma").toLowerCase());
+    const id = setInterval(tick, 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  // ── Weather ──
+  type WeatherInfo = { temp: number; emoji: string; city: string };
+  const [weather, setWeather] = useState<WeatherInfo | null>(null);
+
+  useEffect(() => {
+    const WMO_EMOJI: Record<number, string> = {
+      0: "☀️", 1: "🌤️", 2: "⛅", 3: "☁️",
+      45: "🌫️", 48: "🌫️",
+      51: "🌦️", 53: "🌦️", 55: "🌦️",
+      61: "🌧️", 63: "🌧️", 65: "🌧️",
+      71: "❄️", 73: "❄️", 75: "❄️",
+      80: "🌦️", 81: "🌦️", 82: "⛈️",
+      95: "⛈️", 96: "⛈️", 99: "⛈️",
+    };
+    const fetchWeather = async (lat: number, lon: number) => {
+      try {
+        // Reverse geocode city name
+        const geoRes = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`
+        );
+        const geoData = await geoRes.json();
+        const city =
+          geoData?.address?.city ||
+          geoData?.address?.town ||
+          geoData?.address?.village ||
+          geoData?.address?.county ||
+          "";
+
+        // Get current weather
+        const wxRes = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&temperature_unit=celsius`
+        );
+        const wxData = await wxRes.json();
+        const cw = wxData?.current_weather;
+        if (!cw) return;
+        const code = cw.weathercode as number;
+        const emoji = WMO_EMOJI[code] ?? "🌡️";
+        setWeather({ temp: Math.round(cw.temperature), emoji, city });
+      } catch { /* silently ignore */ }
+    };
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => fetchWeather(pos.coords.latitude, pos.coords.longitude),
+        () => { /* permission denied — no weather shown */ }
+      );
+    }
+    // Refresh every 10 minutes
+    const id = setInterval(() => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => fetchWeather(pos.coords.latitude, pos.coords.longitude),
+          () => {}
+        );
+      }
+    }, 600000);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <div
       ref={containerRef}
@@ -254,13 +321,39 @@ const Index = () => {
 
             <div style={{ flex: 1, textAlign: "center" }}>
               {isViewingToday ? (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#B6DFB0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#3A8733" }} />
-                  </span>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: "#1D5C17" }}>Now · {format(new Date(), "h:mma").toLowerCase()}</span>
-                  <div style={{ width: 1, height: 14, background: "#B6DFB0", opacity: 0.6 }} />
-                  <span style={{ fontSize: 12, fontWeight: 500, color: "#3A8733" }}>{timeOfDay}</span>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                  {/* Row 1: pulse dot + Now time + divider + time of day */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#B6DFB0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#3A8733" }} />
+                    </span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: "#1D5C17" }}>Now · {nowTime}</span>
+                    <div style={{ width: 1, height: 14, background: "#B6DFB0", opacity: 0.6 }} />
+                    <span style={{ fontSize: 12, fontWeight: 500, color: "#3A8733" }}>{timeOfDay}</span>
+                  </div>
+                  {/* Row 2: date + weather */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: "#3A8733", opacity: 0.8 }}>
+                      {format(today, "EEE, MMM d")}
+                    </span>
+                    {weather && (
+                      <>
+                        <div style={{ width: 1, height: 10, background: "#B6DFB0", opacity: 0.6 }} />
+                        <span style={{ fontSize: 11 }}>{weather.emoji}</span>
+                        <span style={{ fontSize: 11, fontWeight: 500, color: "#3A8733", opacity: 0.85 }}>
+                          {weather.temp}°C
+                        </span>
+                        {weather.city && (
+                          <>
+                            <div style={{ width: 1, height: 10, background: "#B6DFB0", opacity: 0.6 }} />
+                            <span style={{ fontSize: 10, fontWeight: 500, color: "#3A8733", opacity: 0.65, maxWidth: 80, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {weather.city}
+                            </span>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div>

@@ -138,7 +138,7 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
   const moveDragRef = useRef<{ startY: number; origStart: number } | null>(null);
 
   function handleEventMoveMouseDown(ev: React.MouseEvent, event: CalEvent) {
-    // only trigger on the bubble body, not on resize handle
+    // only trigger on the bubble body, not on resize handle or Google events
     if ((ev.target as HTMLElement).closest("[data-resize-handle]")) return;
     // don't preventDefault yet — let click events pass through if no real drag
     ev.stopPropagation();
