@@ -3,9 +3,12 @@ import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { format, eachDayOfInterval, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isSameMonth, addMonths, subMonths } from "date-fns";
 import { X, Trash2, Check, Ban, RotateCcw, Lightbulb, Link2, FileText, Bookmark, CheckSquare, ExternalLink, Pencil, type LucideIcon } from "lucide-react";
-import { CalEvent, CaptureKind, Tag, DURATIONS } from "@/types/event";
+import { CalEvent, CaptureKind, Tag } from "@/types/event";
 import { getTag } from "@/lib/tags";
-import { minutesToLabel, durationLabel } from "@/lib/event-utils";
+import { minutesToLabel, durationLabel, nowMinutes } from "@/lib/event-utils";
+
+const PANEL_MARGIN = 16;
+const PANEL_WIDTH = 360;
 
 const KIND_ICON: Record<CaptureKind, LucideIcon> = {
   thought: Lightbulb,
@@ -25,14 +28,16 @@ const KIND_COLORS: Record<CaptureKind, { bg: string; text: string }> = {
   meal:    { bg: "#FEF3C7", text: "#92400E" },
 };
 
-function tagColors(tagId?: string): { bg: string; text: string; sub: string } {
+function tagColors(tagId?: string): { bg: string; text: string; sub: string; light: string; pale: string } {
   switch (tagId) {
-    case "work":     return { bg: "#B5AEED", text: "#2A246B", sub: "#4D4699" };
-    case "deepwork": return { bg: "#AEE5D1", text: "#063A2F", sub: "#156353" };
-    case "study":    return { bg: "#A2CAE8", text: "#08305A", sub: "#1D528A" };
-    case "personal": return { bg: "#EEB6C8", text: "#5C1D32", sub: "#8F3A56" };
-    case "social":   return { bg: "#F4C26E", text: "#4D2B05", sub: "#804E11" };
-    default:         return { bg: "#E6E4DD", text: "#333331", sub: "#666461" };
+    case "work":     return { bg: "#AFA9EC", text: "#3C3489", sub: "#534AB7", light: "#CECBF6", pale: "#EEEDFE" };
+    case "deepwork": return { bg: "#9FE1CB", text: "#085041", sub: "#0F6E56", light: "#E1F5EE", pale: "#E1F5EE" };
+    case "study":    return { bg: "#B5D4F4", text: "#0C447C", sub: "#185FA5", light: "#E6F1FB", pale: "#E6F1FB" };
+    case "personal": return { bg: "#F4C0D1", text: "#72243E", sub: "#993556", light: "#FBEAF0", pale: "#FBEAF0" };
+    case "social":   return { bg: "#FAC775", text: "#633806", sub: "#854F0B", light: "#FAEEDA", pale: "#FAEEDA" };
+    case "health":   return { bg: "#C0DD97", text: "#27500A", sub: "#3B6D11", light: "#EAF3DE", pale: "#EAF3DE" };
+    case "errand":   return { bg: "#F5C4B3", text: "#712B13", sub: "#993C1D", light: "#FAECE7", pale: "#FAECE7" };
+    default:         return { bg: "#D3D1C7", text: "#444441", sub: "#5F5E5A", light: "#F1EFE8", pale: "#F1EFE8" };
   }
 }
 
@@ -75,9 +80,21 @@ function EditMiniCal({ selected, onSelect }: { selected: string; onSelect: (d: s
   );
 }
 
-function EditTimePicker({ selected, onSelect }: { selected: number; onSelect: (m: number) => void }) {
+function EditTimePicker({
+  selected,
+  onSelect,
+  min = 7 * 60,
+  max = 22 * 60,
+  step = 15,
+}: {
+  selected: number;
+  onSelect: (m: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+}) {
   const slots: number[] = [];
-  for (let t = 7 * 60; t <= 22 * 60; t += 30) slots.push(t);
+  for (let t = min; t <= max; t += step) slots.push(t);
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 3, maxHeight: 140, overflowY: "auto" }} className="scrollbar-hidden">
       {slots.map(t => (
@@ -99,10 +116,12 @@ interface Props {
   onMark?: (completed: boolean | null) => void;
   onDelete?: () => void;
   onUpdate?: (patch: Partial<CalEvent>) => void;
+  onCopy?: (event: CalEvent) => void;
   isResizing?: boolean;
+  compact?: boolean;
 }
 
-export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizing }: Props) {
+export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, isResizing, compact = false }: Props) {
   const tag = tags ? getTag(tags, event.tagId) : undefined;
   const colors = tagColors(tag?.id ?? event.tagId);
   const [showDetail, setShowDetail] = useState(false);
@@ -118,8 +137,9 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizin
   const [editTagId, setEditTagId] = useState(event.tagId ?? "");
   const [editLocation, setEditLocation] = useState(event.where ?? "");
   const [editPeople, setEditPeople] = useState(event.who ?? "");
+  const [editTentative, setEditTentative] = useState(event.tentative === true);
   // which sub-section is expanded inside edit mode
-  const [expandSection, setExpandSection] = useState<"date" | "time" | null>(null);
+  const [expandSection, setExpandSection] = useState<"date" | "startTime" | "endTime" | null>(null);
 
   useEffect(() => {
     if (showDetail) {
@@ -130,17 +150,49 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizin
       setEditTagId(event.tagId ?? "");
       setEditLocation(event.where ?? "");
       setEditPeople(event.who ?? "");
+      setEditTentative(event.tentative === true);
       setEditMode(false);
       setExpandSection(null);
     }
   }, [showDetail, event]);
 
   const isCompleted = event.completed === true;
-  const isSkipped = event.completed === false;
+  const isSkipped   = event.completed === false;
+  const isTentative = event.tentative === true;
+  const isSpecialState = isCompleted || isSkipped || isTentative;
+  
+  const now = nowMinutes();
+  const eventEnd = event.start + event.duration;
+  const isInProgress = now >= event.start && now < eventEnd;
 
-  const bgColor = isCompleted ? "#BBDD8E" : isSkipped ? "#E6E4DD" : colors.bg;
-  const textColor = isCompleted ? "#27500A" : isSkipped ? "#888" : colors.text;
-  const subColor = isCompleted ? "#3C6B13" : isSkipped ? "#999" : colors.sub;
+  const bgColor = isCompleted
+    ? "#EAF3DE"
+    : isSkipped
+      ? "#D3D1C7"
+      : isTentative
+        ? "#EEEDFE"
+        : colors.bg;
+  const textColor = isCompleted
+    ? "#173404"
+    : isSkipped
+      ? "#2C2C2A"
+      : isTentative
+        ? colors.text
+        : colors.text;
+  const subColor = isCompleted
+    ? "#3B6D11"
+    : isSkipped
+      ? "#5F5E5A"
+      : isTentative
+        ? colors.sub
+        : colors.sub;
+  const borderColor = isCompleted
+    ? "transparent"
+    : isSkipped
+      ? "transparent"
+      : isTentative
+        ? "#534AB7"
+        : "transparent";
 
   useEffect(() => {
     if (!showDetail) return;
@@ -159,12 +211,19 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizin
     e.stopPropagation();
     if (isResizing) return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const panelW = 360;
-    const panelH = 560;
-    const x = rect.right + 12 + panelW > window.innerWidth
+    const panelW = Math.min(PANEL_WIDTH, window.innerWidth - PANEL_MARGIN * 2);
+    const panelH = Math.min(680, window.innerHeight - PANEL_MARGIN * 2);
+    const preferredX = rect.right + 12 + panelW > window.innerWidth
       ? rect.left - panelW - 12
       : rect.right + 12;
-    const y = Math.min(rect.top, window.innerHeight - panelH - 16);
+    const x = Math.min(
+      Math.max(PANEL_MARGIN, preferredX),
+      window.innerWidth - panelW - PANEL_MARGIN
+    );
+    const y = Math.min(
+      Math.max(PANEL_MARGIN, rect.top),
+      window.innerHeight - panelH - PANEL_MARGIN
+    );
     setPanelPos({ x, y });
     setShowDetail((v) => !v);
   }
@@ -179,6 +238,7 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizin
       tagId: editTagId || undefined,
       where: editLocation.trim() || undefined,
       who: editPeople.trim() || undefined,
+      tentative: editTentative || undefined,
     });
     setEditMode(false);
     setExpandSection(null);
@@ -192,11 +252,14 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizin
     setEditTagId(event.tagId ?? "");
     setEditLocation(event.where ?? "");
     setEditPeople(event.who ?? "");
+    setEditTentative(event.tentative === true);
     setEditMode(false);
     setExpandSection(null);
   }
 
   const endMin = editStart + editDuration;
+  const latestStart = Math.max(7 * 60, 22 * 60 - 15);
+  const earliestEnd = Math.min(22 * 60, editStart + 15);
   const displayEndMin = event.start + event.duration;
   const dateLabel = (() => {
     try { return format(new Date(event.date + "T00:00:00"), "EEE, MMM d"); } catch { return event.date; }
@@ -232,14 +295,14 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizin
           position: "fixed",
           left: panelPos.x,
           top: panelPos.y,
-          width: 360,
+          width: `min(${PANEL_WIDTH}px, calc(100vw - ${PANEL_MARGIN * 2}px))`,
           background: "#FAFAF8",
           borderRadius: 20,
           boxShadow: "0 24px 72px -8px rgba(0,0,0,0.24), 0 4px 20px -4px rgba(0,0,0,0.12)",
           border: "1px solid rgba(0,0,0,0.07)",
           zIndex: 999,
           overflow: "hidden",
-          maxHeight: "92vh",
+          maxHeight: `calc(100vh - ${PANEL_MARGIN * 2}px)`,
           display: "flex",
           flexDirection: "column",
         }}
@@ -318,35 +381,67 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizin
                 )}
               </div>
 
-              {/* Time */}
+              {/* Start time */}
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 11, fontWeight: 700, color: "#AAA", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>Start time</label>
                 <button
                   type="button"
-                  onClick={() => setExpandSection(s => s === "time" ? null : "time")}
-                  style={{ width: "100%", textAlign: "left", background: expandSection === "time" ? "#EBE8FC" : "#F5F3F0", border: "1.5px solid " + (expandSection === "time" ? "#7B73D6" : "transparent"), borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 600, color: "#3C3489", cursor: "pointer" }}
+                  onClick={() => setExpandSection(s => s === "startTime" ? null : "startTime")}
+                  style={{ width: "100%", textAlign: "left", background: expandSection === "startTime" ? "#EBE8FC" : "#F5F3F0", border: "1.5px solid " + (expandSection === "startTime" ? "#7B73D6" : "transparent"), borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 600, color: "#3C3489", cursor: "pointer" }}
                 >
-                  {minutesToLabel(editStart)} → {minutesToLabel(endMin)}
+                  {minutesToLabel(editStart)}
                 </button>
-                {expandSection === "time" && (
+                {expandSection === "startTime" && (
                   <div style={{ marginTop: 6, background: "#F3F0FE", borderRadius: 12, padding: 10 }}>
-                    <EditTimePicker selected={editStart} onSelect={t => { setEditStart(t); setExpandSection(null); }} />
+                    <EditTimePicker
+                      selected={editStart}
+                      min={7 * 60}
+                      max={latestStart}
+                      step={15}
+                      onSelect={(t) => {
+                        setEditStart(t);
+                        setEditDuration((prev) => {
+                          const nextEnd = Math.max(t + 15, t + prev);
+                          return Math.min(22 * 60, nextEnd) - t;
+                        });
+                        setExpandSection(null);
+                      }}
+                    />
                   </div>
                 )}
               </div>
 
-              {/* Duration */}
+              {/* End time */}
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#AAA", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>End time</label>
+                <button
+                  type="button"
+                  onClick={() => setExpandSection(s => s === "endTime" ? null : "endTime")}
+                  style={{ width: "100%", textAlign: "left", background: expandSection === "endTime" ? "#EBE8FC" : "#F5F3F0", border: "1.5px solid " + (expandSection === "endTime" ? "#7B73D6" : "transparent"), borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 600, color: "#3C3489", cursor: "pointer" }}
+                >
+                  {minutesToLabel(endMin)}
+                </button>
+                {expandSection === "endTime" && (
+                  <div style={{ marginTop: 6, background: "#F3F0FE", borderRadius: 12, padding: 10 }}>
+                    <EditTimePicker
+                      selected={endMin}
+                      min={earliestEnd}
+                      max={22 * 60}
+                      step={15}
+                      onSelect={(t) => {
+                        setEditDuration(Math.max(15, t - editStart));
+                        setExpandSection(null);
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Duration summary */}
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 11, fontWeight: 700, color: "#AAA", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>Duration</label>
-                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                  {DURATIONS.map(d => (
-                    <button type="button" key={d} onClick={() => setEditDuration(d)} style={{
-                      padding: "6px 12px", borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                      background: editDuration === d ? "#3C3489" : "#F5F3F0",
-                      color: editDuration === d ? "#fff" : "#3C3489",
-                      border: "1.5px solid " + (editDuration === d ? "#3C3489" : "rgba(123,115,214,0.22)"),
-                    }}>{durationLabel(d)}</button>
-                  ))}
+                <div style={{ background: "#F5F3F0", borderRadius: 10, padding: "8px 12px", fontSize: 13, fontWeight: 600, color: "#3C3489" }}>
+                  {durationLabel(editDuration)}
                 </div>
               </div>
 
@@ -375,6 +470,39 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizin
                   </div>
                 </div>
               )}
+
+              {/* Confidence */}
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#AAA", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4 }}>Confidence</label>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button type="button" onClick={() => setEditTentative(false)} style={{
+                    flex: 1,
+                    padding: "8px 12px",
+                    borderRadius: 10,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    background: !editTentative ? "#3C3489" : "#F5F3F0",
+                    color: !editTentative ? "#fff" : "#3C3489",
+                    border: "1.5px solid " + (!editTentative ? "#3C3489" : "rgba(123,115,214,0.22)"),
+                  }}>
+                    Confirmed
+                  </button>
+                  <button type="button" onClick={() => setEditTentative(true)} style={{
+                    flex: 1,
+                    padding: "8px 12px",
+                    borderRadius: 10,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    background: editTentative ? "#F4EEE2" : "#F5F3F0",
+                    color: editTentative ? "#7A5423" : "#3C3489",
+                    border: "1.5px dashed " + (editTentative ? "#C39A63" : "rgba(123,115,214,0.22)"),
+                  }}>
+                    Maybe / tentative
+                  </button>
+                </div>
+              </div>
 
               {/* Location */}
               <div style={{ marginBottom: 12 }}>
@@ -415,6 +543,13 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizin
               <FieldRow label="Date" value={dateLabel} />
               <FieldRow label="Time" value={<>{minutesToLabel(event.start)} → {minutesToLabel(displayEndMin)} <span style={{ fontSize: 11, color: "#bbb" }}>· {durationLabel(event.duration)}</span></>} />
               {displayTag && <FieldRow label="Tag" value={<span style={{ fontSize: 12, fontWeight: 700, background: tagColors(displayTag.id).bg, color: tagColors(displayTag.id).text, borderRadius: 12, padding: "2px 10px" }}>#{displayTag.name}</span>} />}
+              {isTentative && (
+                <FieldRow label="Status" value={
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#7A5423", background: "#F6E7CF", borderRadius: 12, padding: "2px 10px", border: "1px dashed #D3AE78" }}>
+                    tentative
+                  </span>
+                } />
+              )}
               {event.where && <FieldRow label="Where" value={<>📍 {event.where}</>} />}
               {event.who && <FieldRow label="Who" value={<>👥 {event.who}</>} />}
               {(isCompleted || isSkipped) && (
@@ -484,17 +619,30 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizin
               </div>
             )}
 
-            {onDelete && (
-              <div style={{ padding: "0 18px 16px" }}>
-                <button
-                  type="button"
-                  onClick={() => { onDelete(); setShowDetail(false); }}
-                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#FEF0EE", color: "#C0392B", border: "1.5px solid #FACEC9", borderRadius: 12, padding: "10px 0", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#FDDBD8")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "#FEF0EE")}
-                >
-                  <Trash2 size={14} strokeWidth={2} /> Delete event
-                </button>
+            {(onCopy || onDelete) && (
+              <div style={{ padding: "0 18px 16px", display: "flex", gap: 8 }}>
+                {onCopy && (
+                  <button
+                    type="button"
+                    onClick={() => { onCopy(event); setShowDetail(false); }}
+                    style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#F0EDFE", color: "#3C3489", border: "1.5px solid #C8BEF5", borderRadius: 12, padding: "10px 0", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#E2DCFD")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "#F0EDFE")}
+                  >
+                    Copy
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={() => { onDelete(); setShowDetail(false); }}
+                    style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "#FEF0EE", color: "#C0392B", border: "1.5px solid #FACEC9", borderRadius: 12, padding: "10px 0", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#FDDBD8")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "#FEF0EE")}
+                  >
+                    <Trash2 size={14} strokeWidth={2} /> Delete
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -516,66 +664,200 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, isResizin
         whileHover={{ y: -1 }}
         onClick={handleBubbleClick}
         style={{
-          borderRadius: 10,
-          background: "transparent",
-          padding: "10px 12px",
+          borderRadius: 12,
+          background: bgColor,
+          padding: "8px 12px",
           cursor: "pointer",
           position: "relative",
-          border: `1px solid ${isCompleted ? "#A4C779" : isSkipped ? "#D3D1C8" : colors.bg}`,
-          opacity: isSkipped ? 0.7 : 1,
+          border: isTentative && !isCompleted && !isSkipped
+            ? "2px dashed #534AB7"
+            : "none",
+          opacity: isSkipped ? 0.72 : 1,
           userSelect: "none",
           height: "100%",
           boxSizing: "border-box",
-          overflow: "visible",
-          outline: showDetail ? `2px solid ${colors.text}55` : "none",
-          outlineOffset: 1,
+          overflow: "hidden",
+          outline: showDetail ? `2px solid ${colors.text}44` : "none",
+          outlineOffset: 2,
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "none",
         }}
       >
-        {/* Animated background fill */}
-        <motion.div
-          initial={{ height: "0%" }}
-          animate={{ height: "100%" }}
-          transition={{ duration: 0.7, ease: "easeOut", delay: 0.1 }}
-          style={{
+        {/* In-progress state: left border + "happening now" label with pulsing dot */}
+        {isInProgress && !isCompleted && !isSkipped && (
+          <>
+            <div style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              bottom: 0,
+              width: 3,
+              background: colors.text,
+              borderRadius: "12px 0 0 12px",
+              zIndex: 1,
+            }} />
+            <div style={{
+              position: "absolute",
+              top: 4,
+              left: 8,
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              zIndex: 2,
+            }}>
+              <span style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: colors.light,
+                boxShadow: `0 0 0 3px ${colors.light}`,
+                animation: "pulse 1.5s ease-in-out infinite",
+              }} />
+              <span style={{
+                fontSize: 9,
+                fontWeight: 500,
+                color: colors.text,
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+              }}>
+                happening now
+              </span>
+            </div>
+          </>
+        )}
+
+        {/* Left accent bar for other states (not in-progress) */}
+        {!isInProgress && !(isTentative && !isCompleted && !isSkipped) && !isCompleted && !isSkipped && (
+          <div style={{
             position: "absolute",
-            bottom: 0, left: 0, right: 0,
-            background: bgColor,
-            zIndex: 0,
-            borderRadius: 8,
-          }}
-        />
+            top: 6, bottom: 6, left: 0,
+            width: 3,
+            borderRadius: "0 2px 2px 0",
+            background: colors.sub,
+            zIndex: 1,
+          }} />
+        )}
+
+        {/* Tentative "?" badge — top-right corner */}
+        {isTentative && !isCompleted && !isSkipped && (
+          <div
+            style={{
+              position: "absolute",
+              top: -7,
+              right: -7,
+              width: 20,
+              height: 20,
+              borderRadius: "50%",
+              background: "#534AB7",
+              border: "2px solid white",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 4,
+            }}
+          >
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", lineHeight: 1 }}>?</span>
+          </div>
+        )}
+
+        {/* Tentative "maybe" pill inside card */}
+        {isTentative && !isCompleted && !isSkipped && (
+          <span style={{
+            position: "absolute",
+            top: 6,
+            right: 6,
+            fontSize: 9,
+            fontWeight: 500,
+            background: "#CECBF6",
+            color: "#3C3489",
+            borderRadius: 20,
+            padding: "2px 6px",
+          }}>
+            maybe
+          </span>
+        )}
 
         {/* Completed badge */}
         {isCompleted && (
-          <div style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", background: "#3A6115", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10 }}>
+          <div style={{ position: "absolute", top: -7, right: -7, width: 20, height: 20, borderRadius: "50%", background: "#3B6D11", border: "2px solid white", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10 }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
           </div>
         )}
 
         {/* Skipped badge */}
         {isSkipped && (
-          <div style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", background: "#9B9B9A", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10 }}>
+          <div style={{ position: "absolute", top: -7, right: -7, width: 20, height: 20, borderRadius: "50%", background: "#5F5E5A", border: "2px solid white", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10 }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
           </div>
         )}
 
         {/* Title */}
-        <div style={{ position: "relative", zIndex: 1 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: textColor, textDecoration: isSkipped ? "line-through" : "none", lineHeight: 1.3 }}>
+        <div style={{ position: "relative", zIndex: 1, flex: "0 0 auto", minHeight: 0 }}>
+          <span style={{
+            fontSize: 12,
+            fontWeight: 500,
+            color: textColor,
+            textDecoration: isSkipped ? "line-through" : "none",
+            lineHeight: 1.25,
+            display: "-webkit-box",
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}>
             {event.title}
           </span>
         </div>
 
         {/* Subtitle */}
-        <p style={{ position: "relative", zIndex: 1, fontSize: 12, color: subColor, marginTop: 3, fontWeight: 500 }}>
-          {minutesToLabel(event.start)} · {durationLabel(event.duration)}{tag ? ` · #${tag.name}` : ""}
+        <p style={{
+          position: "relative", zIndex: 1,
+          fontSize: 10, color: subColor,
+          marginTop: 3, fontWeight: 400,
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          flex: "0 0 auto",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+        }}>
+          <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+            {minutesToLabel(event.start)} · {durationLabel(event.duration)}
+          </span>
+          {tag && (
+            <span style={{
+              flexShrink: 0,
+              fontSize: 9,
+              fontWeight: 500,
+              color: colors.text,
+              background: colors.pale,
+              borderRadius: 20,
+              padding: "2px 7px",
+              lineHeight: 1.2,
+            }}>
+              #{tag.name}
+            </span>
+          )}
         </p>
 
         {/* Location / people badges */}
         {(event.where || event.who) && (
-          <div style={{ position: "relative", zIndex: 1, marginTop: 4, display: "flex", gap: 4, flexWrap: "wrap" }}>
-            {event.where && <span style={{ fontSize: 10, color: subColor, fontWeight: 500 }}>📍 {event.where}</span>}
-            {event.who && <span style={{ fontSize: 10, color: subColor, fontWeight: 500 }}>👥 {event.who}</span>}
+          <div style={{
+            position: "relative", zIndex: 1,
+            marginTop: 3,
+            display: "flex", gap: 4, flexWrap: "nowrap",
+            overflow: "hidden",
+            flex: "0 0 auto",
+          }}>
+            {event.where && (
+              <span style={{ fontSize: 10, color: subColor, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                📍 {event.where}
+              </span>
+            )}
+            {event.who && (
+              <span style={{ fontSize: 10, color: subColor, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                👥 {event.who}
+              </span>
+            )}
           </div>
         )}
       </motion.div>

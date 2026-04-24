@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,9 +6,8 @@
 
 @layer base {
   :root {
-    /* Page */
-    --background: 240 5% 96%;        /* #F4F4F6 */
-    --foreground: 220 20% 14%;       /* near-black */
+    --background: 240 5% 96%;
+    --foreground: 220 20% 14%;
 
     --card: 0 0% 100%;
     --card-foreground: 220 20% 14%;
@@ -16,51 +15,121 @@
     --popover: 0 0% 100%;
     --popover-foreground: 220 20% 14%;
 
-    /* Primary = blue from spec */
-    --primary: 213 80% 58%;
+    --primary: 247 48% 60%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 213 90% 72%;
+    --primary-glow: 247 60% 88%;
 
-    --secondary: 220 14% 96%;
+    --secondary: 40 8% 96%;
     --secondary-foreground: 220 20% 14%;
 
-    --muted: 220 10% 92%;
-    --muted-foreground: 220 8% 52%;
+    --muted: 40 8% 94%;
+    --muted-foreground: 40 6% 46%;
 
-    --accent: 246 40% 50%;
+    --accent: 247 48% 60%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 12% 88%;
-    --border-tertiary: 220 10% 91%;
-    --input: 220 12% 90%;
-    --ring: 213 80% 58%;
+    --border: 40 12% 90%;
+    --border-tertiary: 40 10% 91%;
+    --input: 40 12% 90%;
+    --ring: 247 48% 60%;
 
     --radius: 1.25rem;
 
-    /* ── Spec-exact event tag colours ── */
+    /* Page & Panel backgrounds */
+    --bg-page: #F4F4F6;
+    --bg-panel: #FFFFFF;
+    --bg-secondary: #FAFAFA;
+
+    /* ── PRIMARY PURPLE RAMP ── */
+    --purple-pale: #EEEDFE;
+    --purple-light: #CECBF6;
+    --purple-mid: #AFA9EC;
+    --purple-strong: #534AB7;
+    --purple-dark: #3C3489;
+    --purple-darkest: #26215C;
+
+    /* ── TEAL RAMP (deepwork/success) ── */
+    --teal-pale: #E1F5EE;
+    --teal-mid: #9FE1CB;
+    --teal-strong: #0F6E56;
+    --teal-text: #085041;
+
+    /* ── BLUE RAMP (study) ── */
+    --blue-pale: #E6F1FB;
+    --blue-mid: #B5D4F4;
+    --blue-strong: #185FA5;
+    --blue-text: #0C447C;
+
+    /* ── PINK RAMP (personal) ── */
+    --pink-pale: #FBEAF0;
+    --pink-mid: #F4C0D1;
+    --pink-strong: #993556;
+    --pink-text: #72243E;
+
+    /* ── AMBER RAMP (social) ── */
+    --amber-pale: #FAEEDA;
+    --amber-mid: #FAC775;
+    --amber-strong: #854F0B;
+    --amber-text: #633806;
+
+    /* ── CORAL RAMP (work calls/alerts) ── */
+    --coral-pale: #FAECE7;
+    --coral-mid: #F5C4B3;
+    --coral-strong: #993C1D;
+    --coral-text: #712B13;
+
+    /* ── GREEN RAMP (completed) ── */
+    --green-pale: #EAF3DE;
+    --green-mid: #C0DD97;
+    --green-strong: #3B6D11;
+    --green-text: #27500A;
+    --green-dark-text: #173404;
+
+    /* ── GRAY RAMP (skipped/neutral) ── */
+    --gray-pale: #F1EFE8;
+    --gray-mid: #D3D1C7;
+    --gray-strong: #5F5E5A;
+    --gray-text: #444441;
+    --gray-skipped-text: #2C2C2A;
+
+    /* ── TAG COLORS ── */
     /* work → purple */
     --tag-work-bg: #AFA9EC;
     --tag-work-text: #3C3489;
+    --tag-work-sub: #534AB7;
     /* deepwork → teal */
     --tag-deepwork-bg: #9FE1CB;
     --tag-deepwork-text: #085041;
+    --tag-deepwork-sub: #0F6E56;
     /* study → blue */
     --tag-study-bg: #B5D4F4;
     --tag-study-text: #0C447C;
+    --tag-study-sub: #185FA5;
     /* personal → pink */
     --tag-personal-bg: #F4C0D1;
     --tag-personal-text: #72243E;
+    --tag-personal-sub: #993556;
     /* social → amber */
     --tag-social-bg: #FAC775;
     --tag-social-text: #633806;
+    --tag-social-sub: #854F0B;
+    /* health → green */
+    --tag-health-bg: #C0DD97;
+    --tag-health-text: #27500A;
+    --tag-health-sub: #3B6D11;
+    /* errand → coral */
+    --tag-errand-bg: #F5C4B3;
+    --tag-errand-text: #712B13;
+    --tag-errand-sub: #993C1D;
     /* neutral */
     --tag-neutral-bg: #D3D1C7;
     --tag-neutral-text: #444441;
+    --tag-neutral-sub: #5F5E5A;
 
-    /* ── Backpack chip colours ── */
+    /* ── BACKPACK CHIP COLORS ── */
     --chip-thought-bg: #EEEDFE;
     --chip-thought-text: #3C3489;
     --chip-link-bg: #E6F1FB;
@@ -71,33 +140,35 @@
     --chip-ref-text: #633806;
     --chip-task-bg: #FBEAF0;
     --chip-task-text: #72243E;
+    --chip-meal-bg: #FAEEDA;
+    --chip-meal-text: #EF9F27;
 
-    /* ── Now marker ── */
-    --now: 246 40% 50%;
-    --now-halo: 246 60% 88%;
-    --now-line: #7B73D6;
-    --now-pill-bg: #7B73D6;
+    /* ── NOW MARKER ── */
+    --now: #534AB7;
+    --now-halo: #CECBF6;
+    --now-line: #AFA9EC;
+    --now-pill-bg: #EEEDFE;
 
-    /* ── Gap placeholder ── */
+    /* ── GAP INDICATOR ── */
     --gap-bg: #F1EFE8;
     --gap-border: #D3D1C7;
-    --gap-text: #888580;
+    --gap-text: #5F5E5A;
+    --gap-dot: #B4B2A9;
 
-    /* ── Weekend tint ── */
+    /* ── WEEKEND TINTS ── */
     --weekend-bg: #E1F5EE;
+    --weekend-border: #5DCAA5;
     --weekend-text: #085041;
+    --sunday-bg: #FAEEDA;
+    --sunday-border: #EF9F27;
+    --sunday-text: #633806;
 
+    /* ── TEXT COLORS ── */
+    --text-tertiary: #888580;
+
+    /* Shadows */
     --shadow-panel: 0 1px 3px rgba(0,0,0,0.06);
     --shadow-bubble: 0 4px 16px -6px rgba(80,70,180,0.14), 0 1px 4px -2px rgba(80,70,180,0.07);
-
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 }
 
@@ -108,7 +179,7 @@
 
   body {
     font-family: 'Inter', system-ui, sans-serif;
-    background-color: #F4F4F6;
+    background-color: var(--bg-page);
     color: hsl(var(--foreground));
     -webkit-font-smoothing: antialiased;
     font-feature-settings: 'cv11', 'ss01';
@@ -116,21 +187,42 @@
 }
 
 @layer utilities {
-  /* tag bg/text helpers using CSS vars */
+  /* Tag background/text helpers */
   .tag-work     { background: var(--tag-work-bg);     color: var(--tag-work-text); }
   .tag-deepwork { background: var(--tag-deepwork-bg); color: var(--tag-deepwork-text); }
   .tag-study    { background: var(--tag-study-bg);    color: var(--tag-study-text); }
   .tag-personal { background: var(--tag-personal-bg); color: var(--tag-personal-text); }
   .tag-social   { background: var(--tag-social-bg);   color: var(--tag-social-text); }
+  .tag-health   { background: var(--tag-health-bg);   color: var(--tag-health-text); }
+  .tag-errand   { background: var(--tag-errand-bg);   color: var(--tag-errand-text); }
   .tag-neutral  { background: var(--tag-neutral-bg);  color: var(--tag-neutral-text); }
 
-  /* accent left bar */
+  /* Tag accent bars */
   .tag-work-bar     { background: var(--tag-work-text); }
   .tag-deepwork-bar { background: var(--tag-deepwork-text); }
   .tag-study-bar    { background: var(--tag-study-text); }
   .tag-personal-bar { background: var(--tag-personal-text); }
   .tag-social-bar   { background: var(--tag-social-text); }
+  .tag-health-bar   { background: var(--tag-health-text); }
+  .tag-errand-bar   { background: var(--tag-errand-text); }
   .tag-neutral-bar  { background: var(--tag-neutral-text); }
+
+  /* Completed state colors */
+  .tag-completed-bg { background: var(--green-pale); }
+  .tag-completed-sub { background: var(--green-mid); }
+  .tag-completed-text { color: var(--green-text); }
+  .tag-completed-badge { background: var(--green-strong); }
+
+  /* Skipped state colors */
+  .tag-skipped-bg { background: var(--gray-mid); }
+  .tag-skipped-text { color: var(--gray-skipped-text); }
+  .tag-skipped-badge { background: var(--gray-strong); }
+
+  /* Tentative state colors */
+  .tag-tentative-bg { background: var(--purple-pale); }
+  .tag-tentative-border { border: 2px dashed var(--purple-strong); }
+  .tag-tentative-badge { background: var(--purple-strong); }
+  .tag-tentative-pill { background: var(--purple-light); color: var(--purple-dark); }
 
   .shadow-panel  { box-shadow: var(--shadow-panel); }
   .shadow-bubble { box-shadow: var(--shadow-bubble); }
@@ -138,7 +230,11 @@
   .scrollbar-hidden::-webkit-scrollbar { display: none; }
   .scrollbar-hidden { scrollbar-width: none; }
 
-  /* time grid */
   .hour-line { border-top: 0.5px solid hsl(var(--border)); }
   .col-divider { border-right: 0.5px solid hsl(var(--border)); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.85); }
+  }
 }

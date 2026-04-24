@@ -4,21 +4,26 @@ import {
   addDays,
   addWeeks,
   differenceInDays,
+  eachWeekOfInterval,
+  endOfMonth,
   endOfWeek,
   format,
   isToday,
   startOfDay,
+  startOfMonth,
   startOfWeek,
   subWeeks,
 } from "date-fns";
-import { Undo2, Redo2 } from "lucide-react";
+import { Undo2, Redo2, Calendar, CalendarDays, EyeOff } from "lucide-react";
 import { CalEvent, Tag } from "@/types/event";
 import { DEFAULT_TAGS } from "@/lib/tags";
 import { TaskComposer } from "@/components/TaskComposer";
 import { DayColumn } from "@/components/DayColumn";
 import { Backpack } from "@/components/Backpack";
+import { AnalogClock } from "@/components/AnalogClock";
+import { MonthView } from "@/components/MonthView";
 import { nowMinutes, minutesToLabel } from "@/lib/event-utils";
-import { useUnplacedCount } from "@/lib/capture-store";
+import { useCaptures, useUnplacedCount } from "@/lib/capture-store";
 
 // ── Undo/Redo history reducer ──────────────────────────────────────
 type HistoryState = {
@@ -55,15 +60,30 @@ function historyReducer(state: HistoryState, action: HistoryAction): HistoryStat
 
 const Index = () => {
   const today = startOfDay(new Date());
+  const [weekWindowMode, setWeekWindowMode] = useState<"today-partial" | "today-bridge" | "calendar">("today-partial");
   const [currentWeekStart, setCurrentWeekStart] = useState(() => today);
+  const nextCalendarWeekStart = useMemo(
+    () => startOfWeek(addWeeks(today, 1), { weekStartsOn: 1 }),
+    [today]
+  );
+  // 6 days before today — backward bridge start, today stays as rightmost (7 cols total)
+  const prevPartialStart = useMemo(() => addDays(today, -6), [today]);
 
   const weekDates = useMemo(() => {
-    const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
-    const numDays = differenceInDays(weekEnd, currentWeekStart) + 1;
+    let span: number;
+    if (weekWindowMode === "today-partial") {
+      // today → end of week (Friday if Mon-start)
+      span = differenceInDays(endOfWeek(currentWeekStart, { weekStartsOn: 1 }), currentWeekStart) + 1;
+    } else if (weekWindowMode === "today-bridge" && currentWeekStart.getTime() === prevPartialStart.getTime()) {
+      // backward bridge: 6 days back + today = 7 cols, Friday rightmost
+      span = 7;
+    } else {
+      span = 7;
+    }
     const days: Date[] = [];
-    for (let i = 0; i < numDays; i++) days.push(addDays(currentWeekStart, i));
+    for (let i = 0; i < span; i++) days.push(addDays(currentWeekStart, i));
     return days;
-  }, [currentWeekStart]);
+  }, [currentWeekStart, weekWindowMode, prevPartialStart]);
 
   const todayKey = format(today, "yyyy-MM-dd");
 
@@ -129,7 +149,7 @@ const Index = () => {
   const undo = useCallback(() => { dispatch({ type: "UNDO" }); showToast("Undone"); }, []);
   const redo = useCallback(() => { dispatch({ type: "REDO" }); showToast("Redone"); }, []);
 
-  // Keyboard shortcuts: Cmd+Z / Cmd+Shift+Z
+  // Keyboard shortcuts: Cmd+Z / Cmd+Shift+Z (paste wired later after handlePasteEvent)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const mod = e.metaKey || e.ctrlKey;
@@ -141,7 +161,8 @@ const Index = () => {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const [viewMode, setViewMode] = useState<"week" | "today">("week");
+  const [viewMode, setViewMode] = useState<"week" | "focus" | "month">("week");
+  const [focusDate, setFocusDate] = useState<Date>(today);
   const [promptEvent, setPromptEvent] = useState<CalEvent | null>(null);
 
   useEffect(() => {
@@ -206,6 +227,8 @@ const Index = () => {
   }, []);
 
   const unplaced = useUnplacedCount(todayKey);
+  const allCaptures = useCaptures();
+  const [compactMode, setCompactMode] = useState(false);
 
   // ── Left panel date navigation ──
   const [selectedDate, setSelectedDate] = useState<Date>(today);
@@ -215,9 +238,40 @@ const Index = () => {
   const prevDay = useCallback(() => setSelectedDate((d) => addDays(d, -1)), []);
   const nextDay = useCallback(() => setSelectedDate((d) => addDays(d, 1)), []);
 
-  const displayDates = viewMode === "today"
-    ? weekDates.filter((d) => isToday(d))
+  // ── Copy/paste ──
+  const copiedEventRef = useRef<CalEvent | null>(null);
+  const handleCopyEvent = useCallback((event: CalEvent) => {
+    copiedEventRef.current = event;
+    showToast(`"${event.title}" copied — Cmd+V to paste`);
+  }, []);
+
+  const handlePasteEvent = useCallback(() => {
+    const src = copiedEventRef.current;
+    if (!src) return;
+    const newEvent: CalEvent = { ...src, id: crypto.randomUUID(), date: selectedDayKey, source: "local", googleId: undefined };
+    dispatch({ type: "PUSH", events: [...events, newEvent] });
+    showToast(`Pasted "${src.title}" to ${format(selectedDate, "EEE d")}`);
+  }, [events, selectedDayKey, selectedDate]);
+
+  // Cmd+V paste
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || e.key !== "v") return;
+      if (!copiedEventRef.current) return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      e.preventDefault();
+      handlePasteEvent();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [handlePasteEvent]);
+
+  const focusDateKey = format(focusDate, "yyyy-MM-dd");
+  const displayDates = viewMode === "focus"
+    ? [focusDate]
     : weekDates;
+
 
   const todayEvents = events.filter((e) => e.date === todayKey);
   const todayEventCount = todayEvents.length;
@@ -295,6 +349,62 @@ const Index = () => {
     return () => clearInterval(id);
   }, []);
 
+  const handleWeekBack = useCallback(() => {
+    if (weekWindowMode === "today-partial") {
+      // Mirror of forward: show the 6 days before today (last Sat → Thu if today=Fri)
+      setCurrentWeekStart(prevPartialStart);
+      setWeekWindowMode("today-bridge");
+      return;
+    }
+
+    if (weekWindowMode === "today-bridge") {
+      if (currentWeekStart.getTime() === today.getTime()) {
+        // Was the forward bridge (Sat-Sun after today) → go back to today-partial
+        setCurrentWeekStart(today);
+        setWeekWindowMode("today-partial");
+        return;
+      }
+      // Was the backward bridge (6 days before today) → go one full week further back
+      setCurrentWeekStart(addDays(prevPartialStart, -7));
+      setWeekWindowMode("calendar");
+      return;
+    }
+
+    // In calendar mode: go back 7 days
+    setCurrentWeekStart((prev) => addDays(prev, -7));
+    setWeekWindowMode("calendar");
+  }, [currentWeekStart, prevPartialStart, today, weekWindowMode]);
+
+  const handleWeekForward = useCallback(() => {
+    if (weekWindowMode === "today-partial") {
+      // Show Sat-Sun after today
+      setCurrentWeekStart(today);
+      setWeekWindowMode("today-bridge");
+      return;
+    }
+
+    if (weekWindowMode === "today-bridge") {
+      if (currentWeekStart.getTime() === prevPartialStart.getTime()) {
+        // Was the backward bridge → pressing forward returns to today-partial
+        setCurrentWeekStart(today);
+        setWeekWindowMode("today-partial");
+        return;
+      }
+      // Was the forward bridge (Sat-Sun) → jump to next full Mon-Sun week
+      setCurrentWeekStart(nextCalendarWeekStart);
+      setWeekWindowMode("calendar");
+      return;
+    }
+
+    setCurrentWeekStart((prev) => addDays(prev, 7));
+    setWeekWindowMode("calendar");
+  }, [currentWeekStart, nextCalendarWeekStart, prevPartialStart, today, weekWindowMode]);
+
+  const handleWeekToday = useCallback(() => {
+    setCurrentWeekStart(today);
+    setWeekWindowMode("today-partial");
+  }, [today]);
+
   return (
     <div
       ref={containerRef}
@@ -307,9 +417,37 @@ const Index = () => {
         style={{ width: leftPanelWidth, background: "#F4F1ED", borderRadius: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
       >
         {/* Header */}
-        <div style={{ padding: "24px 24px 16px" }}>
+        <div style={{ padding: "24px 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h1 style={{ fontSize: 24, fontWeight: 600, color: "hsl(var(--foreground))" }}>Horizon</h1>
+          {viewMode === "focus" && (
+            <button
+              onClick={() => setViewMode("week")}
+              title="Exit focus mode"
+              style={{ background: "rgba(123,115,214,0.1)", border: "none", borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 600, color: "#7B73D6", cursor: "pointer", letterSpacing: "0.03em" }}
+            >
+              ← week
+            </button>
+          )}
         </div>
+
+        {/* Analog clock in focus mode */}
+        <AnimatePresence>
+          {viewMode === "focus" && (
+            <motion.div
+              key="clock"
+              initial={{ opacity: 0, scale: 0.88, y: -8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.88, y: -8 }}
+              transition={{ type: "spring", stiffness: 340, damping: 26 }}
+              style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingBottom: 16, gap: 8 }}
+            >
+              <AnalogClock size={148} />
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#7B73D6", letterSpacing: "0.04em", opacity: 0.8 }}>
+                {format(focusDate, "EEEE, MMMM d")}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Date Navigator */}
         <div style={{ padding: "0 24px", marginBottom: 16 }}>
@@ -394,17 +532,76 @@ const Index = () => {
           />
         </div>
 
-        {/* Footer */}
-        <div style={{ padding: "16px 24px" }}>
-          <button style={{ borderRadius: 20, background: "hsl(var(--muted))", border: "none", padding: "7px 16px", fontSize: 12, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, color: "hsl(var(--muted-foreground))" }}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <rect x="2" y="10" width="2" height="2" rx="0.5" fill="currentColor"/>
-              <rect x="5" y="7" width="2" height="5" rx="0.5" fill="currentColor"/>
-              <rect x="8" y="4" width="2" height="8" rx="0.5" fill="currentColor"/>
-              <rect x="11" y="2" width="2" height="10" rx="0.5" fill="currentColor"/>
+        {/* Footer — export / import */}
+        <div style={{ padding: "12px 24px 16px", display: "flex", gap: 8 }}>
+          <button
+            onClick={() => {
+              const payload = {
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                horizon_events: localStorage.getItem("horizon_events") ?? "[]",
+                horizon_backpack: localStorage.getItem("horizon_backpack") ?? "[]",
+              };
+              const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `horizon-backup-${format(new Date(), "yyyy-MM-dd")}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              showToast("Data exported");
+            }}
+            style={{
+              flex: 1, borderRadius: 14, background: "#EEEDFE",
+              border: "1px solid #C8BEF5", padding: "8px 0",
+              fontSize: 12, fontWeight: 600, color: "#3C3489",
+              cursor: "pointer", display: "flex", alignItems: "center",
+              justifyContent: "center", gap: 6,
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+              <path d="M6.5 1v7M3.5 5.5l3 3 3-3M1.5 10h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            Continue
+            Export
           </button>
+
+          <label
+            style={{
+              flex: 1, borderRadius: 14, background: "#F0F0F0",
+              border: "1px solid #DEDAD4", padding: "8px 0",
+              fontSize: 12, fontWeight: 600, color: "#555",
+              cursor: "pointer", display: "flex", alignItems: "center",
+              justifyContent: "center", gap: 6,
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+              <path d="M6.5 9V2M3.5 4.5l3-3 3 3M1.5 10h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            Import
+            <input
+              type="file"
+              accept=".json"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  try {
+                    const data = JSON.parse(ev.target?.result as string);
+                    if (data.horizon_events) localStorage.setItem("horizon_events", data.horizon_events);
+                    if (data.horizon_backpack) localStorage.setItem("horizon_backpack", data.horizon_backpack);
+                    showToast("Data imported — reloading…");
+                    setTimeout(() => window.location.reload(), 1200);
+                  } catch {
+                    showToast("Invalid backup file");
+                  }
+                };
+                reader.readAsText(file);
+                e.target.value = "";
+              }}
+            />
+          </label>
         </div>
       </div>
 
@@ -425,13 +622,17 @@ const Index = () => {
         {/* Header */}
         <div style={{ padding: "20px 24px 16px" }} className="flex shrink-0 items-start justify-between">
           <div className="flex items-center gap-4">
-            {viewMode === "today" ? (
+            {viewMode === "focus" ? (
               <div>
-                <h2 style={{ fontSize: 28, fontWeight: 700, lineHeight: "1.1" }}>Today</h2>
+                <h2 style={{ fontSize: 28, fontWeight: 700, lineHeight: "1.1" }}>
+                  {isToday(focusDate) ? "Today" : format(focusDate, "EEEE")}
+                </h2>
                 <p style={{ fontSize: 13, color: "hsl(var(--muted-foreground))", marginTop: 3 }}>
-                  {todayLabel} · {todayEventCount} event{todayEventCount !== 1 ? "s" : ""}
+                  {format(focusDate, "MMMM d, yyyy")} · {events.filter(e => e.date === focusDateKey).length} event{events.filter(e => e.date === focusDateKey).length !== 1 ? "s" : ""}
                 </p>
               </div>
+            ) : viewMode === "month" ? (
+              <div /> // header lives inside MonthView
             ) : (
               <div>
                 <h2 style={{ fontSize: 28, fontWeight: 700, lineHeight: "1.1" }}>{format(weekDates[0], "MMMM yyyy")}</h2>
@@ -441,13 +642,13 @@ const Index = () => {
               </div>
             )}
 
-            {viewMode === "week" && (
+            {(viewMode === "week") && (
               <div className="flex items-center gap-1">
-                <button onClick={() => setCurrentWeekStart((prev) => startOfWeek(subWeeks(prev, 1), { weekStartsOn: 1 }))}
+                <button onClick={handleWeekBack}
                   style={{ background: "#fff", border: "1px solid #EAEAEA", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#3C3489" }}>←</button>
-                <button onClick={() => setCurrentWeekStart(today)}
+                <button onClick={handleWeekToday}
                   style={{ background: "#fff", border: "1px solid #EAEAEA", borderRadius: 16, padding: "0 12px", height: 32, cursor: "pointer", fontSize: 12, fontWeight: 500, color: "#3C3489" }}>Today</button>
-                <button onClick={() => setCurrentWeekStart((prev) => startOfWeek(addWeeks(prev, 1), { weekStartsOn: 1 }))}
+                <button onClick={handleWeekForward}
                   style={{ background: "#fff", border: "1px solid #EAEAEA", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#3C3489" }}>→</button>
               </div>
             )}
@@ -460,6 +661,24 @@ const Index = () => {
                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#3D68CC", display: "inline-block" }} />
                 {unplaced} unplaced
               </motion.div>
+            )}
+
+            {/* Compact toggle */}
+            {viewMode !== "month" && (
+              <button
+                onClick={() => setCompactMode((v) => !v)}
+                title={compactMode ? "Expand events" : "Compact view"}
+                style={{
+                  width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                  background: compactMode ? "#7B73D6" : "#fff",
+                  border: compactMode ? "1px solid #7B73D6" : "1px solid #EAEAEA",
+                  color: compactMode ? "#fff" : "#3C3489",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+              >
+                <EyeOff size={14} strokeWidth={2} />
+              </button>
             )}
 
             {/* Undo / Redo buttons */}
@@ -498,8 +717,11 @@ const Index = () => {
 
             {/* View toggle */}
             <div className="flex items-center" style={{ background: "hsl(var(--muted))", borderRadius: 20, padding: 3, gap: 2 }}>
-              {(["week", "today"] as const).map((v) => (
-                <button key={v} onClick={() => setViewMode(v)}
+              {(["week", "month", "focus"] as const).map((v) => (
+                <button key={v} onClick={() => {
+                  if (v === "focus") { setFocusDate(today); setSelectedDate(today); }
+                  setViewMode(v);
+                }}
                   style={{
                     borderRadius: 20, padding: "5px 14px", fontSize: 13,
                     fontWeight: viewMode === v ? 500 : 400,
@@ -509,7 +731,7 @@ const Index = () => {
                     boxShadow: viewMode === v ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
                     transition: "all 0.15s", textTransform: "capitalize",
                   }}>
-                  {v === "today" ? "Focus" : "Week"}
+                  {v === "focus" ? "Focus" : v === "month" ? "Month" : "Week"}
                 </button>
               ))}
             </div>
@@ -518,20 +740,70 @@ const Index = () => {
 
         {/* Grid */}
         <div className="flex min-h-0 flex-1 overflow-hidden" style={{ paddingLeft: 24, paddingRight: 24, paddingBottom: 16 }}>
-          <WeekGrid
-            weekDates={displayDates}
-            events={events}
-            tags={tags}
-            onMark={handleMarkCompletion}
-            onDelete={handleDelete}
-            onResize={handleResize}
-            onUpdate={handleUpdate}
-            onCreate={handleCommit}
-            onMoveToDay={handleMoveToDay}
-            focusMode={viewMode === "today"}
-            selectedDayKey={selectedDayKey}
-            onDayClick={setSelectedDate}
-          />
+          <AnimatePresence mode="wait">
+            {viewMode === "month" ? (
+              <motion.div
+                key="month"
+                initial={{ opacity: 0, height: "100%" }}
+                animate={{ 
+                  opacity: 1, 
+                  height: "100%",
+                  transition: { duration: 0.35, ease: [0.4, 0, 0.2, 1] }
+                }}
+                exit={{ 
+                  opacity: 0,
+                  height: "100%",
+                  transition: { duration: 0.25, ease: [0.4, 0, 0.6, 1] }
+                }}
+                style={{ width: "100%", height: "100%" }}
+              >
+                <MonthView
+                  events={events}
+                  tags={tags}
+                  onDayClick={(date) => { setSelectedDate(date); setViewMode("week"); setCurrentWeekStart(startOfWeek(date, { weekStartsOn: 1 })); setWeekWindowMode("calendar"); }}
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="week"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                style={{ width: "100%", height: "100%", display: "flex" }}
+              >
+                <WeekGrid
+                  weekDates={displayDates}
+                  events={events}
+                  tags={tags}
+                  allCaptures={allCaptures}
+                  onMark={handleMarkCompletion}
+                  onDelete={handleDelete}
+                  onResize={handleResize}
+                  onUpdate={handleUpdate}
+                  onCreate={handleCommit}
+                  onMoveToDay={handleMoveToDay}
+                  onCopyEvent={handleCopyEvent}
+                  compact={compactMode}
+                  focusMode={viewMode === "focus"}
+                  selectedDayKey={selectedDayKey}
+                  onDayClick={(date) => {
+                    const dateKey = format(date, "yyyy-MM-dd");
+                    if (viewMode === "focus") {
+                      if (dateKey === focusDateKey) setViewMode("week");
+                      else { setFocusDate(date); setSelectedDate(date); }
+                    } else {
+                      if (dateKey === selectedDayKey) {
+                        setFocusDate(date);
+                        setViewMode("focus");
+                      } else {
+                        setSelectedDate(date);
+                      }
+                    }
+                  }}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
@@ -614,16 +886,19 @@ const Index = () => {
 };
 
 /* ── Week Grid ── */
-function WeekGrid({ weekDates, events, tags, onMark, onDelete, onResize, onUpdate, onCreate, onMoveToDay, focusMode, selectedDayKey, onDayClick }: {
+function WeekGrid({ weekDates, events, tags, allCaptures, onMark, onDelete, onResize, onUpdate, onCreate, onMoveToDay, onCopyEvent, compact, focusMode, selectedDayKey, onDayClick }: {
   weekDates: Date[];
   events: CalEvent[];
   tags: Tag[];
+  allCaptures: import("@/types/event").CaptureItem[];
   onMark: (eventId: string, completed: boolean | null) => void;
   onDelete: (eventId: string) => void;
   onResize: (eventId: string, newDuration: number) => void;
   onUpdate: (eventId: string, patch: Partial<CalEvent>) => void;
   onCreate: (event: CalEvent) => void;
   onMoveToDay: (eventId: string, newDate: string) => void;
+  onCopyEvent: (event: CalEvent) => void;
+  compact?: boolean;
   focusMode?: boolean;
   selectedDayKey?: string;
   onDayClick?: (date: Date) => void;
@@ -643,12 +918,15 @@ function WeekGrid({ weekDates, events, tags, onMark, onDelete, onResize, onUpdat
               date={d}
               events={events.filter((e) => e.date === dateKey)}
               tags={tags}
+              taskItems={allCaptures.filter((c) => c.kind === "task" && c.dayKey === dateKey && c.start !== undefined)}
               onMark={onMark}
               onDelete={onDelete}
               onResize={onResize}
               onUpdate={onUpdate}
               onCreate={onCreate}
               onMoveToDay={onMoveToDay}
+              onCopyEvent={onCopyEvent}
+              compact={compact}
               focusMode={focusMode}
               isSelected={dateKey === selectedDayKey}
               onDayClick={onDayClick}

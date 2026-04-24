@@ -10,22 +10,50 @@ export function NowMarker() {
   }, []);
 
   return (
-    <div style={{
-      background: "#F6F5FE",
-      border: "1px solid #C5BEF5",
-      borderRadius: 16,
-      padding: "6px 12px",
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-    }}>
-      <span style={{ width: 12, height: 12, borderRadius: "50%", background: "#C5BEF5", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7B73D6" }} />
-      </span>
-      <span style={{ fontSize: 13, fontWeight: 600, color: "#3C3489" }}>
-        now · {format(time, "h:mma").toLowerCase()}
-      </span>
-      <div style={{ flex: 1, height: 1, background: "#C5BEF5", opacity: 0.6 }} />
+    <div style={{ position: "relative", display: "flex", alignItems: "center", pointerEvents: "none" }}>
+      {/* Full-width hairline */}
+      <div style={{
+        position: "absolute",
+        left: 0, right: 0,
+        top: "50%",
+        transform: "translateY(-50%)",
+        height: 1,
+        background: "#AFA9EC",
+      }} />
+
+      {/* Dot with halo ring */}
+      <div style={{
+        position: "relative",
+        width: 9,
+        height: 9,
+        borderRadius: "50%",
+        background: "#534AB7",
+        boxShadow: "0 0 0 3px #CECBF6",
+        flexShrink: 0,
+        zIndex: 2,
+      }} />
+
+      {/* Time pill */}
+      <div style={{
+        marginLeft: 7,
+        padding: "2px 8px",
+        borderRadius: 20,
+        background: "#EEEDFE",
+        border: "none",
+        display: "flex",
+        alignItems: "center",
+        zIndex: 2,
+        position: "relative",
+      }}>
+        <span style={{
+          fontSize: 10,
+          fontWeight: 500,
+          color: "#534AB7",
+          letterSpacing: "0.01em",
+        }}>
+          {format(time, "h:mm a").toLowerCase()}
+        </span>
+      </div>
     </div>
   );
 }

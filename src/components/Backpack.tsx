@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { format, isToday, parseISO } from "date-fns";
@@ -8,6 +8,7 @@ import { CalEvent, CaptureItem, CaptureKind, MealType } from "@/types/event";
 import { useCaptures, addCapture, removeCapture, markCapturePlaced, patchCapture } from "@/lib/capture-store";
 import { minutesToLabel } from "@/lib/event-utils";
 import { fetchLinkPreview } from "@/lib/link-preview";
+import { Textarea } from "@/components/ui/textarea";
 
 const KINDS: {
   id: CaptureKind;
@@ -17,11 +18,11 @@ const KINDS: {
   text: string;
   needsUrl?: boolean;
 }[] = [
-  { id: "thought", label: "thought", icon: Lightbulb,  bg: "#EEEDFE", text: "#3C3489" },
-  { id: "link",    label: "link",    icon: Link2,       bg: "#E6F1FB", text: "#0C447C", needsUrl: true },
-  { id: "file",    label: "file",    icon: FileText,    bg: "#EAF3DE", text: "#27500A" },
-  { id: "ref",     label: "ref",     icon: Bookmark,    bg: "#FAEEDA", text: "#633806" },
-  { id: "task",    label: "task",    icon: Square,      bg: "#FBEAF0", text: "#72243E" },
+  { id: "thought", label: "thought", icon: Lightbulb,  bg: "#F1EFE8", text: "#444441" },
+  { id: "link",    label: "link",    icon: Link2,       bg: "#F1EFE8", text: "#444441", needsUrl: true },
+  { id: "file",    label: "file",    icon: FileText,    bg: "#F1EFE8", text: "#444441" },
+  { id: "ref",     label: "ref",     icon: Bookmark,    bg: "#F1EFE8", text: "#444441" },
+  { id: "task",    label: "task",    icon: Square,      bg: "#F1EFE8", text: "#444441" },
 ];
 
 const MEALS: { type: MealType; emoji: string; label: string; placeholder: string }[] = [
@@ -31,13 +32,30 @@ const MEALS: { type: MealType; emoji: string; label: string; placeholder: string
 ];
 
 const MEAL_COLORS: Record<MealType, { bg: string; text: string }> = {
-  breakfast: { bg: "#FEF3C7", text: "#92400E" },
-  lunch:     { bg: "#DCFCE7", text: "#166534" },
-  dinner:    { bg: "#EDE9FE", text: "#5B21B6" },
+  breakfast: { bg: "#F1EFE8", text: "#444441" },
+  lunch:     { bg: "#F1EFE8", text: "#444441" },
+  dinner:    { bg: "#F1EFE8", text: "#444441" },
 };
 
 function kindMeta(k: CaptureKind) {
   return KINDS.find((x) => x.id === k) ?? KINDS[0];
+}
+
+function renderFormattedText(text: string) {
+  const lines = text.split("\n");
+  return lines.map((line, lineIdx) => {
+    const parts = line.split(/(\*\*[^*]+\*\*)/g);
+    return (
+      <Fragment key={lineIdx}>
+        {parts.map((part, partIdx) => {
+          const isBold = /^\*\*[^*]+\*\*$/.test(part);
+          const content = isBold ? part.slice(2, -2) : part;
+          return isBold ? <strong key={partIdx}>{content}</strong> : <Fragment key={partIdx}>{content}</Fragment>;
+        })}
+        {lineIdx < lines.length - 1 && <br />}
+      </Fragment>
+    );
+  });
 }
 
 function Timestamp({ ts, color }: { ts: number; color: string }) {
@@ -52,23 +70,23 @@ function Timestamp({ ts, color }: { ts: number; color: string }) {
   );
 }
 
-// ── Shared action row ────────────────────────────────────────────
+// ── Shared action row ───────────────────────────────────────────
 function CardActions({ onPlace, onRemove, accent }: { onPlace: (e: React.MouseEvent<HTMLButtonElement>) => void; onRemove: () => void; accent: { bg: string; text: string } }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 8 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 6 }}>
       <button
         type="button"
         onClick={onPlace}
-        style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: accent.text, background: accent.bg, border: "none", borderRadius: 6, padding: "3px 9px", cursor: "pointer", letterSpacing: "0.02em" }}
+        style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 9, fontWeight: 500, color: accent.text, background: accent.bg, border: "none", borderRadius: 5, padding: "2px 6px", cursor: "pointer", letterSpacing: "0.02em" }}
       >
         place →
       </button>
       <button
         type="button"
         onClick={onRemove}
-        style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 2, color: "#bbb" }}
+        style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 2, color: "#D3D1C7" }}
       >
-        <X size={11} />
+        <X size={9} />
       </button>
     </div>
   );
@@ -78,19 +96,19 @@ function CardActions({ onPlace, onRemove, accent }: { onPlace: (e: React.MouseEv
 function ThoughtCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e: React.MouseEvent) => void; onRemove: () => void }) {
   return (
     <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: item.placed ? 0.4 : 1, y: 0 }} exit={{ opacity: 0, x: -8 }}
-      style={{ borderRadius: 12, background: "#F0EFFE", border: "1px solid #CCC8F5", marginBottom: 7, padding: "12px 13px", position: "relative" }}
+      style={{ borderRadius: 10, background: "#FAFAFA", border: "0.5px solid #E5E4E0", marginBottom: 5, padding: "8px 10px", position: "relative" }}
     >
-      {/* corner fold */}
-      <div style={{ position: "absolute", top: 0, right: 0, width: 18, height: 18, background: "linear-gradient(225deg, #fff 50%, #CCC8F5 50%)", borderBottomLeftRadius: 6 }} />
-      <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 7 }}>
-        <Lightbulb size={11} color="#7B73D6" strokeWidth={2.2} />
-        <span style={{ fontSize: 10, fontWeight: 700, color: "#9B91E0", textTransform: "uppercase", letterSpacing: "0.07em" }}>thought</span>
-        <span style={{ marginLeft: "auto" }}><Timestamp ts={item.createdAt} color="#B0AAE8" /></span>
+      <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
+        <div style={{ width: 16, height: 16, borderRadius: 4, background: "#F1EFE8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Lightbulb size={9} color="#5F5E5A" strokeWidth={2} />
+        </div>
+        <span style={{ fontSize: 9, fontWeight: 500, color: "#5F5E5A", textTransform: "uppercase", letterSpacing: "0.07em" }}>thought</span>
+        <span style={{ marginLeft: "auto" }}><Timestamp ts={item.createdAt} color="#A8A4A0" /></span>
       </div>
-      <p style={{ fontSize: 13, fontWeight: 500, color: "#2E2870", lineHeight: 1.5, wordBreak: "break-word" }}>
-        {item.title}
+      <p style={{ fontSize: 13, fontWeight: 500, color: "#444441", lineHeight: 1.5, wordBreak: "break-word" }}>
+        {renderFormattedText(item.title)}
       </p>
-      <CardActions onPlace={onPlace} onRemove={onRemove} accent={{ bg: "#E3E0FC", text: "#3C3489" }} />
+      <CardActions onPlace={onPlace} onRemove={onRemove} accent={{ bg: "#F1EFE8", text: "#444441" }} />
     </motion.div>
   );
 }
@@ -99,22 +117,24 @@ function ThoughtCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: 
 function TaskCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e: React.MouseEvent) => void; onRemove: () => void }) {
   return (
     <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: item.placed ? 0.4 : 1, y: 0 }} exit={{ opacity: 0, x: -8 }}
-      style={{ borderRadius: 12, background: "#FFF7F9", border: "1px solid #F0C8D4", marginBottom: 7, padding: "10px 12px" }}
+      style={{ borderRadius: 10, background: "#FAFAFA", border: "0.5px solid #E5E4E0", marginBottom: 5, padding: "8px 10px" }}
     >
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-        <div style={{ width: 18, height: 18, borderRadius: 5, border: "2px solid #D1708A", flexShrink: 0, marginTop: 1, background: "#fff" }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: 13, fontWeight: 600, color: "#4A1628", lineHeight: 1.45, wordBreak: "break-word" }}>
-            {item.title}
-          </p>
-          <span style={{ marginTop: 3, display: "block" }}><Timestamp ts={item.createdAt} color="#C0778A" /></span>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+        <div style={{ width: 16, height: 16, borderRadius: 4, background: "#FAFAFA", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: "1.5px solid #D3D1C7" }}>
+          <Square size={8} color="#5F5E5A" strokeWidth={2} />
         </div>
-        <button onClick={onRemove} style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "#dbb", flexShrink: 0 }}>
-          <X size={11} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: 13, fontWeight: 500, color: "#444441", lineHeight: 1.45, wordBreak: "break-word" }}>
+            {renderFormattedText(item.title)}
+          </p>
+          <span style={{ marginTop: 3, display: "block" }}><Timestamp ts={item.createdAt} color="#A8A4A0" /></span>
+        </div>
+        <button onClick={onRemove} style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "#D3D1C7", flexShrink: 0 }}>
+          <X size={10} />
         </button>
       </div>
-      <div style={{ marginLeft: 28 }}>
-        <CardActions onPlace={onPlace} onRemove={onRemove} accent={{ bg: "#FBEAF0", text: "#72243E" }} />
+      <div style={{ marginLeft: 24 }}>
+        <CardActions onPlace={onPlace} onRemove={onRemove} accent={{ bg: "#F1EFE8", text: "#444441" }} />
       </div>
     </motion.div>
   );
@@ -124,26 +144,27 @@ function TaskCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
 function RefCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e: React.MouseEvent) => void; onRemove: () => void }) {
   return (
     <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: item.placed ? 0.4 : 1, y: 0 }} exit={{ opacity: 0, x: -8 }}
-      style={{ borderRadius: 12, background: "#FFFBF3", border: "1px solid #EDD8AA", marginBottom: 7, padding: "10px 12px", display: "flex", gap: 10 }}
+      style={{ borderRadius: 10, background: "#FAFAFA", border: "0.5px solid #E5E4E0", marginBottom: 5, padding: "8px 10px", display: "flex", gap: 8 }}
     >
-      {/* Bookmark accent bar */}
-      <div style={{ width: 3, borderRadius: 3, background: "#C47A1E", flexShrink: 0, alignSelf: "stretch" }} />
+      {/* Bookmark icon square */}
+      <div style={{ width: 16, height: 16, borderRadius: 4, background: "#F1EFE8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <Bookmark size={9} color="#5F5E5A" strokeWidth={2} />
+      </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
-          <Bookmark size={10} color="#C47A1E" strokeWidth={2.5} fill="#C47A1E" />
-          <span style={{ fontSize: 9, fontWeight: 700, color: "#C47A1E", textTransform: "uppercase", letterSpacing: "0.07em" }}>ref</span>
-          <span style={{ marginLeft: "auto" }}><Timestamp ts={item.createdAt} color="#D4A96A" /></span>
-          <button onClick={onRemove} style={{ background: "none", border: "none", cursor: "pointer", padding: 1, color: "#ddd" }}><X size={10} /></button>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 3 }}>
+          <span style={{ fontSize: 9, fontWeight: 500, color: "#5F5E5A", textTransform: "uppercase", letterSpacing: "0.07em" }}>ref</span>
+          <span style={{ marginLeft: "auto" }}><Timestamp ts={item.createdAt} color="#A8A4A0" /></span>
+          <button onClick={onRemove} style={{ background: "none", border: "none", cursor: "pointer", padding: 1, color: "#D3D1C7" }}><X size={9} /></button>
         </div>
-        <p style={{ fontSize: 13, fontWeight: 600, color: "#4A2800", lineHeight: 1.4, wordBreak: "break-word" }}>
+        <p style={{ fontSize: 13, fontWeight: 500, color: "#444441", lineHeight: 1.4, wordBreak: "break-word" }}>
           {item.title}
         </p>
         {item.url && (
-          <p style={{ fontSize: 10, color: "#C47A1E", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.75 }}>
+          <p style={{ fontSize: 10, color: "#5F5E5A", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.75 }}>
             {item.url}
           </p>
         )}
-        <CardActions onPlace={onPlace} onRemove={onRemove} accent={{ bg: "#FAEEDA", text: "#633806" }} />
+        <CardActions onPlace={onPlace} onRemove={onRemove} accent={{ bg: "#F1EFE8", text: "#444441" }} />
       </div>
     </motion.div>
   );
@@ -155,24 +176,23 @@ function FileCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
   const base = ext ? item.title.slice(0, item.title.lastIndexOf(".")) : item.title;
   return (
     <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: item.placed ? 0.4 : 1, y: 0 }} exit={{ opacity: 0, x: -8 }}
-      style={{ borderRadius: 12, background: "#F3FAF0", border: "1px solid #C3DEB8", marginBottom: 7, padding: "10px 12px" }}
+      style={{ borderRadius: 10, background: "#FAFAFA", border: "0.5px solid #E5E4E0", marginBottom: 5, padding: "8px 10px" }}
     >
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-        {/* File icon */}
-        <div style={{ width: 32, height: 38, flexShrink: 0, background: "#E4F3DE", borderRadius: 6, border: "1px solid #C3DEB8", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", paddingBottom: 5 }}>
-          <FileText size={14} color="#3A6B22" strokeWidth={1.8} />
-          {ext && <span style={{ fontSize: 7, fontWeight: 800, color: "#3A6B22", letterSpacing: "0.04em", marginTop: 2 }}>{ext}</span>}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+        {/* File icon square */}
+        <div style={{ width: 16, height: 16, borderRadius: 4, background: "#F1EFE8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <FileText size={9} color="#5F5E5A" strokeWidth={2} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 3 }}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: "#5C9440", textTransform: "uppercase", letterSpacing: "0.07em" }}>file</span>
-            <span style={{ marginLeft: "auto" }}><Timestamp ts={item.createdAt} color="#8DBF76" /></span>
-            <button onClick={onRemove} style={{ background: "none", border: "none", cursor: "pointer", padding: 1, color: "#ccc" }}><X size={10} /></button>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
+            <span style={{ fontSize: 9, fontWeight: 500, color: "#5F5E5A", textTransform: "uppercase", letterSpacing: "0.07em" }}>file</span>
+            <span style={{ marginLeft: "auto" }}><Timestamp ts={item.createdAt} color="#A8A4A0" /></span>
+            <button onClick={onRemove} style={{ background: "none", border: "none", cursor: "pointer", padding: 1, color: "#D3D1C7" }}><X size={9} /></button>
           </div>
-          <p style={{ fontSize: 13, fontWeight: 600, color: "#1F4A10", lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <p style={{ fontSize: 13, fontWeight: 500, color: "#444441", lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {base}
           </p>
-          <CardActions onPlace={onPlace} onRemove={onRemove} accent={{ bg: "#EAF3DE", text: "#27500A" }} />
+          <CardActions onPlace={onPlace} onRemove={onRemove} accent={{ bg: "#F1EFE8", text: "#444441" }} />
         </div>
       </div>
     </motion.div>
@@ -306,57 +326,53 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
       animate={{ opacity: item.placed ? 0.45 : 1, y: 0 }}
       exit={{ opacity: 0, x: -8 }}
       style={{
-        borderRadius: 12,
-        background: "#F0F6FF",
-        border: "1px solid #C5D9F5",
-        marginBottom: 6,
-        padding: "10px 12px",
+        borderRadius: 10,
+        background: "#FAFAFA",
+        border: "0.5px solid #E5E4E0",
+        marginBottom: 5,
+        padding: "8px 10px",
       }}
     >
       {/* Header row */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-        <img
-          src={`https://www.google.com/s2/favicons?domain=${hostname}&sz=16`}
-          alt=""
-          width={13} height={13}
-          style={{ borderRadius: 3, flexShrink: 0 }}
-          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-        />
-        <span style={{ fontSize: 10, fontWeight: 700, color: "#3A6CB5", textTransform: "uppercase", letterSpacing: "0.06em", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
+        <div style={{ width: 16, height: 16, borderRadius: 4, background: "#F1EFE8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Link2 size={9} color="#5F5E5A" strokeWidth={2} />
+        </div>
+        <span style={{ fontSize: 9, fontWeight: 500, color: "#5F5E5A", textTransform: "uppercase", letterSpacing: "0.06em", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {hostname || "link"}
         </span>
-        <Timestamp ts={item.createdAt} color="#7AAAD4" />
-        <button type="button" onClick={onRemove} style={{ background: "none", border: "none", cursor: "pointer", padding: 1, color: "#aac" }}><X size={11} /></button>
+        <Timestamp ts={item.createdAt} color="#A8A4A0" />
+        <button type="button" onClick={onRemove} style={{ background: "none", border: "none", cursor: "pointer", padding: 1, color: "#D3D1C7" }}><X size={9} /></button>
       </div>
 
       {/* Bold title / URL */}
       <p
         onClick={() => item.url && window.open(item.url, "_blank")}
-        style={{ fontSize: 13, fontWeight: 700, color: "#0C2D58", lineHeight: 1.4, wordBreak: "break-all", cursor: item.url ? "pointer" : "default", marginBottom: 8 }}
+        style={{ fontSize: 13, fontWeight: 500, color: "#444441", lineHeight: 1.4, wordBreak: "break-all", cursor: item.url ? "pointer" : "default", marginBottom: 6 }}
       >
         {displayTitle}
       </p>
 
       {/* URL line */}
       {item.url && displayTitle !== item.url && (
-        <p style={{ fontSize: 10, color: "#5A88C0", marginBottom: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.75 }}>
+        <p style={{ fontSize: 10, color: "#5F5E5A", marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.75 }}>
           {item.url}
         </p>
       )}
 
       {/* Actions */}
-      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
         <button
           type="button"
           onClick={() => item.url && window.open(item.url, "_blank")}
-          style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600, color: "#0C447C", background: "#D6E8FA", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}
+          style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 9, fontWeight: 500, color: "#444441", background: "#F1EFE8", border: "none", borderRadius: 5, padding: "2px 6px", cursor: "pointer" }}
         >
-          <ExternalLink size={9} /> open
+          open
         </button>
         <button
           type="button"
           onClick={onPlace}
-          style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: "#3C3489", background: "#EEEDFE", border: "none", borderRadius: 6, padding: "3px 9px", cursor: "pointer" }}
+          style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 9, fontWeight: 500, color: "#444441", background: "#F1EFE8", border: "none", borderRadius: 5, padding: "2px 6px", cursor: "pointer" }}
         >
           place →
         </button>
@@ -382,6 +398,7 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
   const [adding, setAdding] = useState<CaptureKind | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftUrl, setDraftUrl] = useState("");
+  const draftTitleRef = useRef<HTMLTextAreaElement>(null);
 
   const [addingMeal, setAddingMeal] = useState<MealType | null>(null);
   const [mealText, setMealText] = useState("");
@@ -454,6 +471,23 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
     setTimeout(() => mealInputRef.current?.focus(), 60);
   }
 
+  function toggleDraftBold() {
+    const el = draftTitleRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? draftTitle.length;
+    const end = el.selectionEnd ?? draftTitle.length;
+    const selected = draftTitle.slice(start, end);
+    const replacement = `**${selected || "bold"}**`;
+    const next = draftTitle.slice(0, start) + replacement + draftTitle.slice(end);
+    setDraftTitle(next);
+    setTimeout(() => {
+      el.focus();
+      const cursorStart = start + 2;
+      const cursorEnd = start + replacement.length - 2;
+      el.setSelectionRange(selected ? cursorStart : cursorStart, selected ? cursorEnd : cursorEnd);
+    }, 0);
+  }
+
   function openPlacePicker(item: CaptureItem, e: React.MouseEvent) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setPlaceAnchor({ x: rect.right, y: rect.top });
@@ -511,17 +545,16 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
               onClick={() => { setAdding(active ? null : k.id); setAddingMeal(null); setDraftTitle(""); setDraftUrl(""); }}
               style={{
                 display: "flex", alignItems: "center", gap: 6,
-                borderRadius: 24, padding: "8px 14px",
-                fontSize: 12, fontWeight: 600,
+                borderRadius: 20, padding: "5px 10px",
+                fontSize: 10, fontWeight: 500,
                 background: active ? k.text : k.bg,
                 color: active ? "#fff" : k.text,
-                border: active ? "none" : `1.5px solid ${k.text}22`,
+                border: active ? "none" : `0.5px solid ${k.text}`,
                 cursor: "pointer", transition: "all 0.15s",
-                boxShadow: active ? `0 2px 8px ${k.text}44` : "none",
                 letterSpacing: "0.01em",
               }}
             >
-              <Icon size={12} color={active ? "#fff" : k.text} strokeWidth={2.2} />
+              <Icon size={10} color={active ? "#fff" : k.text} strokeWidth={2} />
               {k.label}
             </button>
           );
@@ -533,25 +566,23 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
         {MEALS.map((m) => {
           const logged = allItems.find((i) => i.kind === "meal" && i.mealType === m.type);
           const active = addingMeal === m.type;
-          const colors = MEAL_COLORS[m.type];
           return (
             <button
               key={m.type}
               onClick={() => active ? setAddingMeal(null) : openMeal(m.type)}
               style={{
                 display: "flex", alignItems: "center", gap: 6,
-                borderRadius: 24, padding: "8px 14px",
-                fontSize: 12, fontWeight: 600,
-                background: active ? colors.text : logged ? colors.bg : "#F0EEE8",
-                color: active ? "#fff" : logged ? colors.text : "#888580",
-                border: logged && !active ? `1.5px solid ${colors.text}40` : active ? "none" : "1.5px solid transparent",
+                borderRadius: 20, padding: "5px 10px",
+                fontSize: 10, fontWeight: 500,
+                background: active ? "#444441" : logged ? "#F1EFE8" : "#F1EFE8",
+                color: active ? "#fff" : logged ? "#444441" : "#888580",
+                border: logged && !active ? "0.5px solid #444441" : active ? "none" : "0.5px solid transparent",
                 cursor: "pointer", transition: "all 0.15s",
-                boxShadow: active ? `0 2px 8px ${colors.text}44` : "none",
               }}
             >
-              <span style={{ fontSize: 13 }}>{m.emoji}</span>
+              <span style={{ fontSize: 11 }}>{m.emoji}</span>
               {m.label}
-              {logged && !active && <span style={{ fontSize: 10, opacity: 0.7 }}>✓</span>}
+              {logged && !active && <span style={{ fontSize: 9, opacity: 0.7 }}>✓</span>}
             </button>
           );
         })}
@@ -567,13 +598,43 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
             style={{ overflow: "hidden", marginBottom: 8 }}
           >
             <div style={{ borderRadius: 10, background: "hsl(var(--muted))", padding: "10px 12px" }}>
-              <input
+              {(adding === "thought" || adding === "task") && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={toggleDraftBold}
+                      style={{ borderRadius: 8, border: "1px solid rgba(0,0,0,0.08)", background: "#fff", color: "hsl(var(--foreground))", padding: "4px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                    >
+                      B
+                    </button>
+                  </div>
+                  <span style={{ fontSize: 10, color: "hsl(var(--muted-foreground))", fontWeight: 500 }}>
+                    `Shift+Enter` new line
+                  </span>
+                </div>
+              )}
+              <Textarea
+                ref={draftTitleRef}
                 autoFocus
                 value={draftTitle}
                 onChange={(e) => adding === "link" ? handleLinkTitleChange(e.target.value) : setDraftTitle(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && commitAdd()}
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+                    e.preventDefault();
+                    toggleDraftBold();
+                    return;
+                  }
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    commitAdd();
+                  }
+                }}
                 placeholder={adding === "link" ? "paste a URL or label…" : `new ${adding}…`}
-                style={{ width: "100%", background: "transparent", border: "none", outline: "none", fontSize: 13, fontWeight: 500, color: "hsl(var(--foreground))" }}
+                rows={adding === "thought" || adding === "task" ? 3 : 2}
+                className="min-h-0 resize-none border-none bg-transparent px-0 py-0 text-[13px] font-medium shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                style={{ width: "100%", background: "transparent", color: "hsl(var(--foreground))" }}
               />
               {kindMeta(adding).needsUrl && (
                 <input
@@ -604,13 +665,13 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
           >
             <div style={{
               borderRadius: 10,
-              background: MEAL_COLORS[addingMeal].bg,
+              background: "#F1EFE8",
               padding: "10px 12px",
-              border: `1px solid ${MEAL_COLORS[addingMeal].text}22`,
+              border: "0.5px solid #D3D1C7",
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                 <span>{MEALS.find((m) => m.type === addingMeal)?.emoji}</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: MEAL_COLORS[addingMeal].text }}>
+                <span style={{ fontSize: 11, fontWeight: 500, color: "#444441" }}>
                   {MEALS.find((m) => m.type === addingMeal)?.label}
                 </span>
               </div>
@@ -622,13 +683,13 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
                 placeholder={MEALS.find((m) => m.type === addingMeal)?.placeholder}
                 style={{
                   width: "100%", background: "transparent", border: "none", outline: "none",
-                  fontSize: 13, fontWeight: 500, color: MEAL_COLORS[addingMeal].text,
+                  fontSize: 13, fontWeight: 500, color: "#444441",
                   boxSizing: "border-box",
                 }}
               />
               <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                <button onClick={commitMeal} style={{ borderRadius: 20, background: MEAL_COLORS[addingMeal].text, color: "#fff", border: "none", padding: "4px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Log</button>
-                <button onClick={() => setAddingMeal(null)} style={{ borderRadius: 20, background: "transparent", border: "none", padding: "4px 8px", fontSize: 11, color: MEAL_COLORS[addingMeal].text, cursor: "pointer", opacity: 0.7 }}>cancel</button>
+                <button onClick={commitMeal} style={{ borderRadius: 20, background: "#444441", color: "#fff", border: "none", padding: "4px 12px", fontSize: 11, fontWeight: 500, cursor: "pointer" }}>Log</button>
+                <button onClick={() => setAddingMeal(null)} style={{ borderRadius: 20, background: "transparent", border: "none", padding: "4px 8px", fontSize: 11, color: "#888580", cursor: "pointer", opacity: 0.7 }}>cancel</button>
               </div>
             </div>
           </motion.div>
@@ -656,23 +717,23 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
                   exit={{ opacity: 0, x: -8 }}
                   style={{
                     display: "flex", alignItems: "center", gap: 8,
-                    borderRadius: 10, background: colors.bg,
-                    border: `0.5px solid ${colors.text}22`,
+                    borderRadius: 10, background: "#FAFAFA",
+                    border: "0.5px solid #E5E4E0",
                     padding: "8px 10px", marginBottom: 5,
                   }}
                 >
                   <span style={{ fontSize: 14, flexShrink: 0 }}>{mealMeta?.emoji ?? "🍴"}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 11, fontWeight: 600, color: colors.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <p style={{ fontSize: 11, fontWeight: 500, color: "#444441", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {item.title}
                     </p>
-                    <span style={{ fontSize: 9, color: colors.text, opacity: 0.65 }}>
+                    <span style={{ fontSize: 9, color: "#A8A4A0", opacity: 0.65 }}>
                       {mealMeta?.label ?? "meal"} · {format(item.createdAt, "h:mma").toLowerCase()}
                     </span>
                   </div>
                   <button
                     onClick={() => removeCapture(item.id)}
-                    style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: colors.text, opacity: 0.4 }}
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "#D3D1C7", opacity: 0.4 }}
                   >
                     <X size={11} />
                   </button>

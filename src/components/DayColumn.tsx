@@ -2,26 +2,32 @@ import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { format, isToday, isTomorrow } from "date-fns";
 import { motion } from "framer-motion";
-import { X } from "lucide-react";
-import { CalEvent, Tag, DURATIONS } from "@/types/event";
+import { X, CheckSquare } from "lucide-react";
+import { CalEvent, CaptureItem, Tag, DURATIONS } from "@/types/event";
 import { EventBubble } from "./EventBubble";
-import { GapPlaceholder } from "./GapPlaceholder";
 import { NowMarker } from "./NowMarker";
 import { nowMinutes, minutesToLabel, durationLabel } from "@/lib/event-utils";
+import { patchCapture } from "@/lib/capture-store";
+
+const PANEL_MARGIN = 16;
+const PANEL_WIDTH = 360;
 
 interface Props {
   date: Date;
   events: CalEvent[];
   tags: Tag[];
+  taskItems?: CaptureItem[];
   onMark?: (eventId: string, completed: boolean | null) => void;
   onDelete?: (eventId: string) => void;
   onResize?: (eventId: string, newDuration: number) => void;
   onUpdate?: (eventId: string, patch: Partial<CalEvent>) => void;
   onCreate?: (event: CalEvent) => void;
   onMoveToDay?: (eventId: string, newDate: string) => void;
+  onCopyEvent?: (event: CalEvent) => void;
   onDayClick?: (date: Date) => void;
   isSelected?: boolean;
   focusMode?: boolean;
+  compact?: boolean;
 }
 
 const timeToY = (mins: number) => Math.max(0, mins - 7 * 60);
@@ -30,9 +36,9 @@ const yToTime = (y: number) => y + 7 * 60;
 type Section = "MORNING" | "AFTERNOON" | "EVENING";
 
 const SECTION_STYLES: Record<Section, { color: string; lineColor: string; icon?: string }> = {
-  MORNING:   { color: "#B08A4A", lineColor: "#E8D9C0" },
-  AFTERNOON: { color: "#888580", lineColor: "#EAEAEA" },
-  EVENING:   { color: "#6B62B8", lineColor: "#CEC8F0", icon: "🌙" },
+  MORNING:   { color: "#A8A4A0", lineColor: "#EDEBE7" },
+  AFTERNOON: { color: "#A8A4A0", lineColor: "#EDEBE7" },
+  EVENING:   { color: "#AFA9EC", lineColor: "#E0DEFC", icon: "🌙" },
 };
 
 function AbsoluteSectionHeader({ title, y }: { title: Section; y: number }) {
@@ -54,14 +60,16 @@ function snapDuration(mins: number) {
   return Math.max(15, Math.round(mins / 15) * 15);
 }
 
-function tagColors(tagId?: string): { bg: string; text: string; sub: string } {
+function tagColors(tagId?: string): { bg: string; text: string; sub: string; pale: string } {
   switch (tagId) {
-    case "work":     return { bg: "#B5AEED", text: "#2A246B", sub: "#4D4699" };
-    case "deepwork": return { bg: "#AEE5D1", text: "#063A2F", sub: "#156353" };
-    case "study":    return { bg: "#A2CAE8", text: "#08305A", sub: "#1D528A" };
-    case "personal": return { bg: "#EEB6C8", text: "#5C1D32", sub: "#8F3A56" };
-    case "social":   return { bg: "#F4C26E", text: "#4D2B05", sub: "#804E11" };
-    default:         return { bg: "#E6E4DD", text: "#333331", sub: "#666461" };
+    case "work":     return { bg: "#AFA9EC", text: "#3C3489", sub: "#534AB7", pale: "#EEEDFE" };
+    case "deepwork": return { bg: "#9FE1CB", text: "#085041", sub: "#0F6E56", pale: "#E1F5EE" };
+    case "study":    return { bg: "#B5D4F4", text: "#0C447C", sub: "#185FA5", pale: "#E6F1FB" };
+    case "personal": return { bg: "#F4C0D1", text: "#72243E", sub: "#993556", pale: "#FBEAF0" };
+    case "social":   return { bg: "#FAC775", text: "#633806", sub: "#854F0B", pale: "#FAEEDA" };
+    case "health":   return { bg: "#C0DD97", text: "#27500A", sub: "#3B6D11", pale: "#EAF3DE" };
+    case "errand":   return { bg: "#F5C4B3", text: "#712B13", sub: "#993C1D", pale: "#FAECE7" };
+    default:         return { bg: "#D3D1C7", text: "#444441", sub: "#5F5E5A", pale: "#F1EFE8" };
   }
 }
 
@@ -72,7 +80,102 @@ interface DraftEvent {
   anchorY: number;
 }
 
-export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUpdate, onCreate, onMoveToDay, onDayClick, isSelected, focusMode }: Props) {
+// ── Task Pill — floating timed task on the timeline ───────────────
+function TaskPill({ task, timelineRef }: { task: CaptureItem; timelineRef: React.RefObject<HTMLDivElement | null> }) {
+  const dragRef = useRef<{ startY: number; origStart: number } | null>(null);
+  const [liveStart, setLiveStart] = useState(task.start!);
+  const [dragging, setDragging] = useState(false);
+  const [done, setDone] = useState(false);
+
+  function handleMouseDown(e: React.MouseEvent) {
+    e.stopPropagation();
+    dragRef.current = { startY: e.clientY, origStart: liveStart };
+    setDragging(true);
+
+    function onMove(ev: MouseEvent) {
+      if (!dragRef.current) return;
+      const deltaY = ev.clientY - dragRef.current.startY;
+      const newStart = Math.max(7 * 60, Math.min(21 * 60, snapStart(dragRef.current.origStart + deltaY)));
+      setLiveStart(newStart);
+    }
+    function onUp() {
+      if (dragRef.current) {
+        patchCapture(task.id, { start: liveStart });
+      }
+      dragRef.current = null;
+      setDragging(false);
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    }
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+
+  const topY = timeToY(liveStart);
+  const tagC = (() => {
+    switch (task.tagId) {
+      case "work":     return { bg: "#EAE8FB", text: "#3C3489", border: "#C5BEF5" };
+      case "deepwork": return { bg: "#D6F5E8", text: "#1A5C3A", border: "#9FE1CB" };
+      case "study":    return { bg: "#DCEEFA", text: "#08305A", border: "#A2CAE8" };
+      case "personal": return { bg: "#FBEAF0", text: "#72243E", border: "#F4C0D1" };
+      case "social":   return { bg: "#FEF3C7", text: "#92400E", border: "#FAC775" };
+      default:         return { bg: "#F0EDE8", text: "#4A4540", border: "#D4CEC8" };
+    }
+  })();
+
+  return (
+    <div
+      onMouseDown={handleMouseDown}
+      style={{
+        position: "absolute",
+        top: topY,
+        left: 4, right: 4,
+        height: 22,
+        zIndex: 13,
+        cursor: dragging ? "grabbing" : "grab",
+        display: "flex",
+        alignItems: "center",
+        userSelect: "none",
+      }}
+    >
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 5,
+        padding: "3px 8px 3px 6px",
+        borderRadius: 20,
+        background: done ? "#D6F5E8" : tagC.bg,
+        border: `1.5px ${done ? "solid" : "dashed"} ${done ? "#9FE1CB" : tagC.border}`,
+        boxShadow: dragging ? "0 4px 14px rgba(0,0,0,0.14)" : "0 1px 4px rgba(0,0,0,0.07)",
+        fontSize: 10,
+        fontWeight: 600,
+        color: done ? "#1A5C3A" : tagC.text,
+        maxWidth: "100%",
+        overflow: "hidden",
+        transition: "box-shadow 0.15s",
+        backdropFilter: "blur(4px)",
+        WebkitBackdropFilter: "blur(4px)",
+        opacity: done ? 0.65 : 1,
+      }}>
+        <button
+          onMouseDown={e => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); setDone(d => !d); patchCapture(task.id, { placed: !done }); }}
+          style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0 }}
+        >
+          <CheckSquare size={10} color={done ? "#1A5C3A" : tagC.text} strokeWidth={2.5} />
+        </button>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: done ? "line-through" : "none", opacity: done ? 0.7 : 1 }}>
+          {task.title}
+        </span>
+        <span style={{ flexShrink: 0, opacity: 0.55, fontSize: 9, marginLeft: 2 }}>
+          {minutesToLabel(liveStart)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete, onResize, onUpdate, onCreate, onMoveToDay, onCopyEvent, onDayClick, isSelected, focusMode, compact }: Props) {
   const isT = isToday(date);
   const isTom = isTomorrow(date);
   const isWeekend = date.getDay() === 0 || date.getDay() === 6;
@@ -84,19 +187,67 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
 
   const now = nowMinutes();
 
-  let bg = "#F8F8F6";
-  let border = isSelected ? "2px solid #7B73D6" : "1px solid #EAEAEA";
+  // Day column chrome — design system colors
+  let bg = "#FFFFFF";
+  let headerBg = "transparent";
+  let border = "0.5px solid #E5E4E0";
   let titleColor = "#444441";
   let subColor = "#888580";
 
   if (isT) {
-    bg = "#F2FAF0";
-    border = isSelected ? "2px solid #3A8733" : "1px solid #B6DFB0";
-    titleColor = "#1D5C17";
-    subColor = "#3A8733";
+    bg = "#FFFFFF";
+    headerBg = "#EAF3DE";
+    border = "1.5px solid #3B6D11";
+    titleColor = "#27500A";
+    subColor = "#3B6D11";
+  } else if (isSelected) {
+    bg = "#FFFFFF";
+    headerBg = "#EEEDFE";
+    border = "1.5px solid #534AB7";
+    titleColor = "#3C3489";
+    subColor = "#534AB7";
+  } else if (isTom) {
+    bg = "#FFFFFF";
+    headerBg = "#FAFAFA";
+    border = "0.5px solid #E5E4E0";
   }
 
   const sorted = [...events].sort((a, b) => a.start - b.start);
+
+  // Calculate overlapping events and their columns (max 4 side by side)
+  const getEventLayout = (event: CalEvent, allEvents: CalEvent[]) => {
+    const eventEnd = event.start + event.duration;
+    const overlapping = allEvents.filter(e => {
+      if (e.id === event.id) return false;
+      const eEnd = e.start + e.duration;
+      return !(eEnd <= event.start || e.start >= eventEnd);
+    });
+    
+    // Find which column this event should occupy
+    let column = 0;
+    const sortedOverlapping = [...overlapping].sort((a, b) => a.start - b.start);
+    
+    for (const other of sortedOverlapping) {
+      const otherEnd = other.start + other.duration;
+      const otherStart = other.start;
+      
+      // Check if this column is taken by checking if other event overlaps in time
+      // and if other event is in this column position
+      const colTaken = sortedOverlapping.slice(0, sortedOverlapping.indexOf(other)).some(o => {
+        const oEnd = o.start + o.duration;
+        return !(oEnd <= otherStart || o.start >= otherEnd);
+      });
+      
+      if (!colTaken && other.id < event.id) {
+        column++;
+      }
+    }
+    
+    const maxColumns = Math.min(4, Math.max(1, overlapping.length + 1));
+    const width = 100 / maxColumns;
+    
+    return { column, width, maxColumns };
+  };
 
   // ── resize-existing state ──
   const [resizingId, setResizingId] = useState<string | null>(null);
@@ -213,6 +364,7 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
   const [draftTagId, setDraftTagId] = useState("");
   const [draftLocation, setDraftLocation] = useState("");
   const [draftPeople, setDraftPeople] = useState("");
+  const [draftTentative, setDraftTentative] = useState(false);
 
   function getRelativeY(clientY: number) {
     const rect = timelineRef.current?.getBoundingClientRect();
@@ -257,7 +409,9 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
       setDraftTagId("");
       setDraftLocation("");
       setDraftPeople("");
-      setGhost(null);
+      setDraftTentative(false);
+      // keep ghost alive so the slot stays visible while panel is open
+      setGhost({ start: finalStart, duration: dur });
       createDragRef.current = null;
     }
 
@@ -277,24 +431,34 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
       duration: draft.duration,
       where: draftLocation.trim() || undefined,
       who: draftPeople.trim() || undefined,
+      tentative: draftTentative || undefined,
     };
     onCreate(event);
     setDraft(null);
+    setGhost(null);
   }
 
   function cancelDraft() {
     setDraft(null);
     setGhost(null);
+    setDraftTentative(false);
   }
 
   // position the creation panel smartly
   function panelPos(draft: DraftEvent) {
-    const panelW = 360;
-    const panelH = 540;
-    const x = draft.anchorX + panelW > window.innerWidth
+    const panelW = Math.min(PANEL_WIDTH, window.innerWidth - PANEL_MARGIN * 2);
+    const panelH = Math.min(680, window.innerHeight - PANEL_MARGIN * 2);
+    const preferredX = draft.anchorX + panelW > window.innerWidth
       ? draft.anchorX - panelW - 24
       : draft.anchorX;
-    const y = Math.min(Math.max(draft.anchorY - 80, 16), window.innerHeight - panelH - 16);
+    const x = Math.min(
+      Math.max(PANEL_MARGIN, preferredX),
+      window.innerWidth - panelW - PANEL_MARGIN
+    );
+    const y = Math.min(
+      Math.max(draft.anchorY - 80, PANEL_MARGIN),
+      window.innerHeight - panelH - PANEL_MARGIN
+    );
     return { x, y };
   }
 
@@ -313,14 +477,14 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
           position: "fixed",
           left: panelPos(draft).x,
           top: panelPos(draft).y,
-          width: 360,
+          width: `min(${PANEL_WIDTH}px, calc(100vw - ${PANEL_MARGIN * 2}px))`,
           background: "#FAFAF8",
           borderRadius: 20,
           boxShadow: "0 24px 72px -8px rgba(0,0,0,0.24), 0 4px 20px -4px rgba(0,0,0,0.12)",
           border: "1px solid rgba(0,0,0,0.07)",
           zIndex: 999,
           overflow: "hidden",
-          maxHeight: "92vh",
+          maxHeight: `calc(100vh - ${PANEL_MARGIN * 2}px)`,
           display: "flex",
           flexDirection: "column",
         }}
@@ -395,6 +559,60 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
             </div>
           )}
 
+          {/* Confidence */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: "#AAA", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 6 }}>Confidence</label>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                type="button"
+                onClick={() => setDraftTentative(false)}
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  padding: "9px 12px",
+                  borderRadius: 12,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: !draftTentative ? "#3C3489" : "#F5F3F0",
+                  color: !draftTentative ? "#fff" : "#3C3489",
+                  border: "1.5px solid " + (!draftTentative ? "#3C3489" : "rgba(123,115,214,0.22)"),
+                }}
+              >
+                Confirmed
+              </button>
+              <button
+                type="button"
+                onClick={() => setDraftTentative(true)}
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  padding: "9px 12px",
+                  borderRadius: 12,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: draftTentative ? "#F4EEE2" : "#F5F3F0",
+                  color: draftTentative ? "#7A5423" : "#3C3489",
+                  border: "1.5px dashed " + (draftTentative ? "#C39A63" : "rgba(123,115,214,0.22)"),
+                }}
+              >
+                Maybe / tentative
+              </button>
+            </div>
+            <p style={{ fontSize: 11, color: draftTentative ? "#9B7449" : "#999", marginTop: 6, lineHeight: 1.35 }}>
+              {draftTentative
+                ? "Shows as softer and dashed so it reads like a hold, not a locked-in plan."
+                : "Use tentative when this might happen, but you are not committed yet."}
+            </p>
+          </div>
+
           {/* Location */}
           <div style={{ marginBottom: 14 }}>
             <label style={{ fontSize: 11, fontWeight: 700, color: "#AAA", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 6 }}>Location</label>
@@ -434,25 +652,48 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
     document.body
   );
 
+  // opacity fade for days further out
+  const colOpacity = (() => {
+    const diff = Math.abs((date.getTime() - new Date().setHours(0,0,0,0)) / 86400000);
+    if (isT || isTom) return 1;
+    if (diff <= 2) return 0.82;
+    if (isWeekend) return 0.55;
+    return 1;
+  })();
+
   return (
     <div style={{
       flex: 1,
       background: bg,
       border,
-      borderRadius: 16,
+      borderRadius: 20,
       display: "flex",
       flexDirection: "column",
       minWidth: focusMode ? 0 : 120,
       minHeight: 80 + 15 * 60,
       position: "relative",
+      opacity: colOpacity,
+      boxShadow: isT ? "0 0 0 0" : "none",
     }}>
-      {/* Header — clickable to sync left panel */}
+      {/* Header — first click selects, second click enters focus */}
       <div
         onClick={() => onDayClick?.(date)}
-        style={{ padding: "16px 16px 8px", height: 80, boxSizing: "border-box", flexShrink: 0, cursor: onDayClick ? "pointer" : "default", borderRadius: "16px 16px 0 0" }}
+        style={{ padding: "14px 14px 8px", height: 76, boxSizing: "border-box", flexShrink: 0, cursor: onDayClick ? "pointer" : "default", borderRadius: "19px 19px 0 0", background: headerBg }}
       >
-        <h3 style={{ fontSize: focusMode ? 20 : 16, fontWeight: 600, color: titleColor }}>{format(date, "EEEE")}</h3>
-        <p style={{ fontSize: 13, color: subColor, fontWeight: 500, marginTop: 2 }}>{subtitle}</p>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+          <h3 style={{ fontSize: focusMode ? 18 : 14, fontWeight: 500, color: titleColor }}>{format(date, "EEEE")}</h3>
+          {isSelected && !focusMode && (
+            <span style={{ fontSize: 9, fontWeight: 500, color: "#534AB7", letterSpacing: "0.07em", textTransform: "uppercase" }}>
+              focus →
+            </span>
+          )}
+          {isT && !focusMode && (
+            <span style={{ fontSize: 9, fontWeight: 500, color: "#3B6D11", letterSpacing: "0.07em", textTransform: "uppercase" }}>
+              today
+            </span>
+          )}
+        </div>
+        <p style={{ fontSize: 11, color: subColor, fontWeight: 500, marginTop: 2 }}>{subtitle}</p>
       </div>
 
       {/* Timeline */}
@@ -471,10 +712,47 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
           transition: "outline 0.1s",
         }}
       >
-        {/* Hour grid lines */}
-        {Array.from({ length: 16 }, (_, i) => i).map((i) => (
-          <div key={`hr-${i}`} style={{ position: "absolute", top: i * 60, left: 0, right: 0, borderTop: i === 0 ? "none" : "1px solid rgba(0,0,0,0.05)", pointerEvents: "none", zIndex: 1 }} />
-        ))}
+        {/* Hour grid lines & markers */}
+        {Array.from({ length: 16 }, (_, i) => i).map((i) => {
+          const hour = 7 + i;
+          const isPM = hour >= 12;
+          const hour12 = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+          return (
+            <div key={`hr-${i}`} style={{ position: "absolute", top: i * 60, left: 0, right: 0, pointerEvents: "none", zIndex: 18 }}>
+              {/* Hour line */}
+              <div style={{
+                borderTop: i === 0 ? "none" : "1px solid rgba(0,0,0,0.05)",
+              }} />
+              {/* Hour label on timeline */}
+              {i > 0 && (
+                <div style={{
+                  position: "absolute",
+                  right: 0,
+                  top: -8,
+                  fontSize: 9,
+                  fontWeight: 500,
+                  color: "rgba(168,164,160,0.7)",
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  whiteSpace: "nowrap",
+                  paddingRight: 10,
+                }}>
+                  <span style={{
+                    position: "absolute",
+                    right: 2,
+                    top: "50%",
+                    width: 5,
+                    height: 1,
+                    borderRadius: 999,
+                    background: "rgba(168,164,160,0.3)",
+                    transform: "translateY(-50%)",
+                  }} />
+                  {hour12}{isPM && hour !== 12 ? "pm" : hour < 12 ? "am" : "pm"}
+                </div>
+              )}
+            </div>
+          );
+        })}
         {Array.from({ length: 15 }, (_, i) => i).map((i) => (
           <div key={`hh-${i}`} style={{ position: "absolute", top: i * 60 + 30, left: 0, right: 0, borderTop: "1px dashed rgba(0,0,0,0.03)", pointerEvents: "none", zIndex: 1 }} />
         ))}
@@ -485,7 +763,7 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
           top: timeToY(17 * 60),
           left: 0, right: 0,
           height: timeToY(22 * 60) - timeToY(17 * 60),
-          background: "rgba(107,98,184,0.045)",
+          background: "rgba(206,203,246,0.06)",
           borderRadius: 8,
           pointerEvents: "none",
           zIndex: 0,
@@ -496,46 +774,80 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
         <AbsoluteSectionHeader title="AFTERNOON" y={timeToY(12 * 60)} />
         <AbsoluteSectionHeader title="EVENING"   y={timeToY(17 * 60)} />
 
-        {/* Weekend free-evening hint */}
-        {isWeekend && (
-          <div style={{ position: "absolute", top: timeToY(17 * 60) + 24, left: 0, right: 0, background: "rgba(107,98,184,0.08)", border: "1px dashed #A89FE0", borderRadius: 8, padding: "10px", textAlign: "center", pointerEvents: "none" }}>
-            <p style={{ fontSize: 13, fontWeight: 500, color: "#6B62B8" }}>🌙 free evening</p>
-            <p style={{ fontSize: 11, color: "#6B62B8", opacity: 0.8 }}>protect this?</p>
-          </div>
-        )}
-
-        {/* Ghost block while drag-creating */}
+        {/* Ghost block while drag-creating / panel open */}
         {ghost && (
           <div
             style={{
               position: "absolute",
               top: timeToY(ghost.start),
               left: 0, right: 0,
-              height: ghost.duration,
-              borderRadius: 8,
-              background: ghostColors.bg,
-              border: `2px dashed ${ghostColors.text}`,
-              opacity: 0.65,
+              height: Math.max(ghost.duration, 30),
+              borderRadius: 10,
+              background: draft
+                ? `${ghostColors.bg}cc`
+                : ghostColors.bg,
+              border: `2px ${draft ? "solid" : "dashed"} ${ghostColors.text}`,
+              opacity: draft ? 0.85 : 0.65,
               pointerEvents: "none",
               zIndex: 12,
               display: "flex",
-              alignItems: "flex-start",
-              padding: "5px 8px",
+              flexDirection: "column",
+              justifyContent: "flex-start",
+              padding: "6px 8px",
               boxSizing: "border-box",
+              backdropFilter: draft ? "blur(4px)" : "none",
+              WebkitBackdropFilter: draft ? "blur(4px)" : "none",
+              boxShadow: draft ? `0 4px 16px ${ghostColors.bg}88` : "none",
+              transition: "opacity 0.2s, border-style 0.2s",
             }}
           >
-            <span style={{ fontSize: 11, fontWeight: 600, color: ghostColors.text }}>
-              {minutesToLabel(ghost.start)} · {durationLabel(ghost.duration)}
+            <span style={{ fontSize: 11, fontWeight: 700, color: ghostColors.text, display: "flex", alignItems: "center", gap: 4 }}>
+              {minutesToLabel(ghost.start)}
+              <span style={{ opacity: 0.45, fontWeight: 400 }}>→</span>
+              {minutesToLabel(ghost.start + ghost.duration)}
             </span>
           </div>
         )}
 
         {/* Events */}
-        {sorted.map((ev) => {
+        {compact ? (
+          // Compact mode: small dot pills at event time
+          sorted.map((ev) => {
+            const colors = tagColors(ev.tagId);
+            return (
+              <div
+                key={ev.id}
+                style={{
+                  position: "absolute",
+                  top: timeToY(ev.start) + 2,
+                  left: 4, right: 4,
+                  height: 16,
+                  zIndex: 10,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  borderRadius: 8,
+                  background: colors.bg,
+                  padding: "0 6px",
+                  cursor: "default",
+                  overflow: "hidden",
+                }}
+              >
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: colors.text, flexShrink: 0 }} />
+                <span style={{ fontSize: 9, fontWeight: 600, color: colors.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {ev.title}
+                </span>
+              </div>
+            );
+          })
+        ) : sorted.map((ev) => {
           const isResizing = resizingId === ev.id;
           const isMoving = movingId === ev.id;
           const displayDuration = isResizing ? liveDuration : ev.duration;
           const displayStart = isMoving ? liveStart : ev.start;
+          const layout = getEventLayout(ev, sorted);
+          const leftOffset = layout.column * layout.width;
+          
           return (
             <div
               key={ev.id}
@@ -549,12 +861,16 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
               style={{
                 position: "absolute",
                 top: timeToY(displayStart),
-                left: 0, right: 0,
+                left: `${leftOffset}%`,
+                width: `${layout.width}%`,
                 height: Math.max(displayDuration, 76),
                 zIndex: isResizing ? 15 : isMoving ? 16 : 10,
                 transition: (isResizing || isMoving) ? "none" : undefined,
                 cursor: isMoving ? "grabbing" : "grab",
                 opacity: isMoving ? 0.85 : 1,
+                paddingLeft: layout.column > 0 ? 2 : 0,
+                paddingRight: layout.column < layout.maxColumns - 1 ? 2 : 0,
+                boxSizing: "border-box",
               }}
             >
               <EventBubble
@@ -563,6 +879,7 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
                 onMark={onMark ? (c) => onMark(ev.id, c) : undefined}
                 onDelete={onDelete ? () => onDelete(ev.id) : undefined}
                 onUpdate={onUpdate ? (patch) => onUpdate(ev.id, patch) : undefined}
+                onCopy={onCopyEvent}
                 isResizing={isResizing || isMoving}
               />
 
@@ -581,7 +898,7 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
                   zIndex: 25,
                   whiteSpace: "nowrap",
                 }}>
-                  {minutesToLabel(liveStart)}
+                  {minutesToLabel(liveStart)} → {minutesToLabel(liveStart + ev.duration)}
                 </div>
               )}
 
@@ -629,31 +946,43 @@ export function DayColumn({ date, events, tags, onMark, onDelete, onResize, onUp
                   zIndex: 25,
                   whiteSpace: "nowrap",
                 }}>
-                  {liveDuration >= 60
-                    ? `${Math.floor(liveDuration / 60)}h${liveDuration % 60 > 0 ? ` ${liveDuration % 60}m` : ""}`
-                    : `${liveDuration}m`}
+                  {minutesToLabel(ev.start)} → {minutesToLabel(ev.start + liveDuration)}
                 </div>
               )}
             </div>
           );
         })}
 
-        {/* Gaps */}
-        {sorted.map((ev, i) => {
-          if (i < sorted.length - 1) {
-            const gap = sorted[i + 1].start - (ev.start + ev.duration);
-            if (gap >= 60) return (
-              <div key={`gap-${ev.id}`} style={{ position: "absolute", top: timeToY(ev.start + ev.duration), left: 0, right: 0, height: gap, padding: "8px 0", boxSizing: "border-box" }}>
-                <GapPlaceholder minutes={gap} />
-              </div>
-            );
-          }
-          return null;
-        })}
+        {/* ── Task pills (timed tasks floating on the timeline) ── */}
+        {taskItems.filter(t => t.kind === "task" && t.start !== undefined).map(task => (
+          <TaskPill
+            key={task.id}
+            task={task}
+            timelineRef={timelineRef}
+          />
+        ))}
+
+        {/* Past wash — glassmorphism overlay for time before now */}
+        {isT && now >= 7 * 60 && now <= 22 * 60 && (
+          <div style={{
+            position: "absolute",
+            top: 0,
+            left: 0, right: 0,
+            height: timeToY(now),
+            background: "linear-gradient(180deg, rgba(155,147,224,0.12) 0%, rgba(140,131,210,0.18) 45%, rgba(127,119,198,0.14) 100%)",
+            backdropFilter: "blur(1.2px) saturate(0.95) brightness(1.04)",
+            WebkitBackdropFilter: "blur(1.2px) saturate(0.95) brightness(1.04)",
+            borderRadius: 8,
+            pointerEvents: "none",
+            zIndex: 9,
+            borderBottom: "1px solid rgba(123,115,214,0.18)",
+            boxShadow: "inset 0 1px 2px rgba(255,255,255,0.35)",
+          }} />
+        )}
 
         {/* Now marker */}
         {isT && now >= 7 * 60 && now <= 22 * 60 && (
-          <div style={{ position: "absolute", top: timeToY(now) - 12, left: 0, right: 0, zIndex: 20 }}>
+          <div style={{ position: "absolute", top: timeToY(now) - 6, left: -4, right: 0, zIndex: 20 }}>
             <NowMarker />
           </div>
         )}
