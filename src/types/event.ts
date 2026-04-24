@@ -61,6 +61,8 @@ export interface CalEvent {
   allDay?: boolean;
   /** Google recurrence event id — groups recurring instances */
   recurrenceId?: string;
+  /** Tentative/draft event — rendered with dashed border */
+  tentative?: boolean;
 }
 
 export interface CaptureItem {
@@ -79,6 +81,8 @@ export interface CaptureItem {
   ogImage?: string;
   ogSite?: string;
   ogLoading?: boolean;
+  /** For timed tasks pinned to the timeline — minutes since midnight */
+  start?: number;
 }
 
 export const DURATIONS = [15, 30, 45, 60, 90, 120];

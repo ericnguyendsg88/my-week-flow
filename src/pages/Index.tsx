@@ -20,7 +20,7 @@ import { DEFAULT_TAGS } from "@/lib/tags";
 import { TaskComposer } from "@/components/TaskComposer";
 import { DayColumn } from "@/components/DayColumn";
 import { Backpack } from "@/components/Backpack";
-import { AnalogClock } from "@/components/AnalogClock";
+
 import { MonthView } from "@/components/MonthView";
 import { nowMinutes, minutesToLabel } from "@/lib/event-utils";
 import { useCaptures, useUnplacedCount } from "@/lib/capture-store";
