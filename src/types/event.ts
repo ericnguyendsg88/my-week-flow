@@ -35,6 +35,8 @@ export interface AttachedItem {
   url?: string;
 }
 
+export type EventSource = "local" | "google";
+
 export interface CalEvent {
   id: string;
   title: string;
@@ -48,8 +50,17 @@ export interface CalEvent {
   duration: number;
   where?: string;
   who?: string;
+  description?: string;
   completed?: boolean | null;
   attachedItems?: AttachedItem[];
+  /** "local" (default) or "google" — Google events are read-only */
+  source?: EventSource;
+  /** Original Google Calendar event id — used to deduplicate on re-sync */
+  googleId?: string;
+  /** True for all-day Google events — rendered as a banner, not on timeline */
+  allDay?: boolean;
+  /** Google recurrence event id — groups recurring instances */
+  recurrenceId?: string;
 }
 
 export interface CaptureItem {
