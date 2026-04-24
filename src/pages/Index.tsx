@@ -441,7 +441,7 @@ const Index = () => {
               transition={{ type: "spring", stiffness: 340, damping: 26 }}
               style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingBottom: 16, gap: 8 }}
             >
-              <AnalogClock size={148} />
+              <div style={{ width: 148, height: 148, borderRadius: "50%", background: "hsl(var(--muted))" }} />
               <div style={{ fontSize: 12, fontWeight: 600, color: "#7B73D6", letterSpacing: "0.04em", opacity: 0.8 }}>
                 {format(focusDate, "EEEE, MMMM d")}
               </div>
