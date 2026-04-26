@@ -106,7 +106,9 @@ export function MonthView({ events, tags, onDayClick }: Props) {
               transition={{ type: "spring", stiffness: 320, damping: 32, mass: 0.9 }}
               style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}
             >
-              {weeks.map((week, wi) => (
+              {weeks.map((week, wi) => {
+                const isCurrentWeek = week.some((d) => isToday(d));
+                return (
                 <div
                   key={wi}
                   style={{
@@ -115,6 +117,10 @@ export function MonthView({ events, tags, onDayClick }: Props) {
                     flex: 1,
                     minHeight: 0,
                     borderBottom: wi < weeks.length - 1 ? "1px solid #E5E2DC" : "none",
+                    outline: isCurrentWeek ? "2px solid #3B6D11" : "none",
+                    outlineOffset: -1,
+                    zIndex: isCurrentWeek ? 1 : 0,
+                    position: "relative",
                   }}
                 >
                   {/* Week number */}
@@ -147,7 +153,8 @@ export function MonthView({ events, tags, onDayClick }: Props) {
                     );
                   })}
                 </div>
-              ))}
+                );
+              })}
             </motion.div>
           </AnimatePresence>
         </div>
