@@ -39,7 +39,9 @@ type HistoryState = {
 type HistoryAction =
   | { type: "PUSH"; events: CalEvent[] }
   | { type: "UNDO" }
-  | { type: "REDO" };
+  | { type: "REDO" }
+  | { type: "REMOTE_UPSERT"; event: CalEvent }
+  | { type: "REMOTE_DELETE"; id: string };
 
 function historyReducer(state: HistoryState, action: HistoryAction): HistoryState {
   switch (action.type) {
@@ -59,6 +61,17 @@ function historyReducer(state: HistoryState, action: HistoryAction): HistoryStat
         present: state.future[0],
         future: state.future.slice(1),
       };
+    case "REMOTE_UPSERT": {
+      const idx = state.present.findIndex((e) => e.id === action.event.id);
+      const next = idx === -1
+        ? [...state.present, action.event]
+        : state.present.map((e) => (e.id === action.event.id ? action.event : e));
+      return { ...state, present: next };
+    }
+    case "REMOTE_DELETE": {
+      if (!state.present.some((e) => e.id === action.id)) return state;
+      return { ...state, present: state.present.filter((e) => e.id !== action.id) };
+    }
   }
 }
 
