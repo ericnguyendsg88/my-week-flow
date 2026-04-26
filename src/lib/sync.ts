@@ -213,3 +213,28 @@ export async function pullCaptures(userId: string): Promise<CaptureItem[] | null
   if (error) { console.warn("[sync] pullCaptures:", error.message); return null; }
   return (data as DbCapture[]).map(rowToCapture);
 }
+
+export function subscribeCaptures(
+  userId: string,
+  onUpsert: (c: CaptureItem) => void,
+  onDelete: (id: string) => void,
+) {
+  if (!supabaseConfigured) return () => {};
+  const channel = supabase
+    .channel(`captures:${userId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "captures", filter: `user_id=eq.${userId}` },
+      (payload) => {
+        if (payload.eventType === "DELETE") {
+          const id = (payload.old as DbCapture | null)?.id;
+          if (id) onDelete(id);
+        } else {
+          const row = payload.new as DbCapture | null;
+          if (row) onUpsert(rowToCapture(row));
+        }
+      },
+    )
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}
