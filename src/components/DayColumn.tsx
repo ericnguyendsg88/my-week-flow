@@ -1191,21 +1191,17 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
           />
         ))}
 
-        {/* Past wash — glassmorphism overlay for time before now */}
+        {/* Past wash — subtle opacity tint for time before now */}
         {isT && now >= DAY_START && now <= DAY_END && (
           <div style={{
             position: "absolute",
             top: 0,
             left: 0, right: 0,
             height: timeToY(now),
-            background: "linear-gradient(180deg, rgba(155,147,224,0.12) 0%, rgba(140,131,210,0.18) 45%, rgba(127,119,198,0.14) 100%)",
-            backdropFilter: "blur(1.2px) saturate(0.95) brightness(1.04)",
-            WebkitBackdropFilter: "blur(1.2px) saturate(0.95) brightness(1.04)",
+            background: "rgba(0,0,0,0.025)",
             borderRadius: 8,
             pointerEvents: "none",
             zIndex: 9,
-            borderBottom: "1px solid rgba(123,115,214,0.18)",
-            boxShadow: "inset 0 1px 2px rgba(255,255,255,0.35)",
           }} />
         )}
 
