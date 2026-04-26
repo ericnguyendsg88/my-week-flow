@@ -122,6 +122,31 @@ export async function pullEvents(userId: string): Promise<CalEvent[] | null> {
   return (data as DbEvent[]).map(rowToEvent);
 }
 
+export function subscribeEvents(
+  userId: string,
+  onUpsert: (e: CalEvent) => void,
+  onDelete: (id: string) => void,
+) {
+  if (!supabaseConfigured) return () => {};
+  const channel = supabase
+    .channel(`events:${userId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "events", filter: `user_id=eq.${userId}` },
+      (payload) => {
+        if (payload.eventType === "DELETE") {
+          const id = (payload.old as DbEvent | null)?.id;
+          if (id) onDelete(id);
+        } else {
+          const row = payload.new as DbEvent | null;
+          if (row) onUpsert(rowToEvent(row));
+        }
+      },
+    )
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}
+
 // ── Captures ─────────────────────────────────────────────────────────
 
 type DbCapture = {
@@ -187,4 +212,29 @@ export async function pullCaptures(userId: string): Promise<CaptureItem[] | null
   const { data, error } = await supabase.from("captures").select("*").eq("user_id", userId);
   if (error) { console.warn("[sync] pullCaptures:", error.message); return null; }
   return (data as DbCapture[]).map(rowToCapture);
+}
+
+export function subscribeCaptures(
+  userId: string,
+  onUpsert: (c: CaptureItem) => void,
+  onDelete: (id: string) => void,
+) {
+  if (!supabaseConfigured) return () => {};
+  const channel = supabase
+    .channel(`captures:${userId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "captures", filter: `user_id=eq.${userId}` },
+      (payload) => {
+        if (payload.eventType === "DELETE") {
+          const id = (payload.old as DbCapture | null)?.id;
+          if (id) onDelete(id);
+        } else {
+          const row = payload.new as DbCapture | null;
+          if (row) onUpsert(rowToCapture(row));
+        }
+      },
+    )
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
 }

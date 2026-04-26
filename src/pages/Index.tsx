@@ -24,8 +24,8 @@ import { Backpack } from "@/components/Backpack";
 
 import { MonthView } from "@/components/MonthView";
 import { nowMinutes, minutesToLabel } from "@/lib/event-utils";
-import { useCaptures, useUnplacedCount, setCaptureSyncUser, syncCapturesFromRemote } from "@/lib/capture-store";
-import { pullEvents, pushEvents, deleteEvent as sbDeleteEvent, useSyncStatus } from "@/lib/sync";
+import { useCaptures, useUnplacedCount, setCaptureSyncUser, syncCapturesFromRemote, applyRemoteCapture, applyRemoteCaptureDelete } from "@/lib/capture-store";
+import { pullEvents, pushEvents, deleteEvent as sbDeleteEvent, useSyncStatus, subscribeEvents, subscribeCaptures } from "@/lib/sync";
 import { AuthGate } from "@/components/AuthGate";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 
@@ -39,7 +39,9 @@ type HistoryState = {
 type HistoryAction =
   | { type: "PUSH"; events: CalEvent[] }
   | { type: "UNDO" }
-  | { type: "REDO" };
+  | { type: "REDO" }
+  | { type: "REMOTE_UPSERT"; event: CalEvent }
+  | { type: "REMOTE_DELETE"; id: string };
 
 function historyReducer(state: HistoryState, action: HistoryAction): HistoryState {
   switch (action.type) {
@@ -59,6 +61,17 @@ function historyReducer(state: HistoryState, action: HistoryAction): HistoryStat
         present: state.future[0],
         future: state.future.slice(1),
       };
+    case "REMOTE_UPSERT": {
+      const idx = state.present.findIndex((e) => e.id === action.event.id);
+      const next = idx === -1
+        ? [...state.present, action.event]
+        : state.present.map((e) => (e.id === action.event.id ? action.event : e));
+      return { ...state, present: next };
+    }
+    case "REMOTE_DELETE": {
+      if (!state.present.some((e) => e.id === action.id)) return state;
+      return { ...state, present: state.present.filter((e) => e.id !== action.id) };
+    }
   }
 }
 
@@ -177,6 +190,10 @@ const HorizonApp = ({ userId }: { userId: string }) => {
   const canUndo = histState.past.length > 0;
   const canRedo = histState.future.length > 0;
 
+  // Stable dispatch ref so subscription callbacks always hit the latest reducer
+  const dispatchRef = useRef(dispatch);
+  useEffect(() => { dispatchRef.current = dispatch; }, [dispatch]);
+
   useEffect(() => {
     localStorage.setItem("horizon_events", JSON.stringify(events));
   }, [events]);
@@ -188,19 +205,28 @@ const HorizonApp = ({ userId }: { userId: string }) => {
     setCaptureSyncUser(userId);
     syncCapturesFromRemote(userId);
 
-    if (didPull.current) return;
-    didPull.current = true;
-    pullEvents(userId).then((remote) => {
-      if (!remote || remote.length === 0) return;
-      const local: CalEvent[] = (() => {
-        try { return JSON.parse(localStorage.getItem("horizon_events") ?? "[]"); } catch { return []; }
-      })();
-      const localIds = new Set(local.map((e) => e.id));
-      const merged = [...local, ...remote.filter((e) => !localIds.has(e.id))];
-      if (merged.length !== local.length) {
+    if (!didPull.current) {
+      didPull.current = true;
+      pullEvents(userId).then((remote) => {
+        if (!remote || remote.length === 0) return;
+        const local: CalEvent[] = (() => {
+          try { return JSON.parse(localStorage.getItem("horizon_events") ?? "[]"); } catch { return []; }
+        })();
+        const remoteIds = new Set(remote.map((e) => e.id));
+        // Prefer remote for shared IDs; keep local-only events too
+        const merged = [...remote, ...local.filter((e) => !remoteIds.has(e.id))];
         dispatch({ type: "PUSH", events: merged });
-      }
-    });
+      });
+    }
+
+    // Realtime subscriptions — keep this device in sync with other devices
+    const unsubEvents = subscribeEvents(
+      userId,
+      (e) => dispatchRef.current?.({ type: "REMOTE_UPSERT", event: e }),
+      (id) => dispatchRef.current?.({ type: "REMOTE_DELETE", id }),
+    );
+    const unsubCaps = subscribeCaptures(userId, applyRemoteCapture, applyRemoteCaptureDelete);
+    return () => { unsubEvents(); unsubCaps(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
