@@ -317,7 +317,19 @@ function PlacePicker({ item, anchorPos, dayEvents, onAttach, onCreateEvent, onCl
 // ── Rich link card ──────────────────────────────────────────────────
 function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e: React.MouseEvent<HTMLButtonElement>) => void; onRemove: () => void }) {
   const hostname = (() => { try { return new URL(item.url ?? "").hostname.replace(/^www\./, ""); } catch { return ""; } })();
-  const displayTitle = item.title && item.title !== item.url ? item.title : hostname || item.url;
+  const displayTitle = item.ogTitle ?? (item.title && item.title !== item.url ? item.title : null) ?? hostname ?? item.url;
+
+  // Retry fetch for items that have a URL but no ogTitle yet
+  useEffect(() => {
+    if (!item.url || item.ogTitle || item.ogLoading) return;
+    patchCapture(item.id, { ogLoading: true });
+    fetchLinkPreview(item.url).then(preview => {
+      patchCapture(item.id, { ogLoading: false, ogTitle: preview.title, ogDescription: preview.description, ogImage: preview.image, ogSite: preview.site });
+    }).catch(() => {
+      patchCapture(item.id, { ogLoading: false });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
 
   return (
     <motion.div
@@ -339,19 +351,23 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
           <Link2 size={9} color="#5F5E5A" strokeWidth={2} />
         </div>
         <span style={{ fontSize: 9, fontWeight: 500, color: "#5F5E5A", textTransform: "uppercase", letterSpacing: "0.06em", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {hostname || "link"}
+          {item.ogSite || hostname || "link"}
         </span>
         <Timestamp ts={item.createdAt} color="#A8A4A0" />
         <button type="button" onClick={onRemove} style={{ background: "none", border: "none", cursor: "pointer", padding: 1, color: "#D3D1C7" }}><X size={9} /></button>
       </div>
 
       {/* Bold title / URL */}
-      <p
-        onClick={() => item.url && window.open(item.url, "_blank")}
-        style={{ fontSize: 13, fontWeight: 500, color: "#444441", lineHeight: 1.4, wordBreak: "break-all", cursor: item.url ? "pointer" : "default", marginBottom: 6 }}
-      >
-        {displayTitle}
-      </p>
+      {item.ogLoading ? (
+        <div style={{ height: 14, borderRadius: 4, background: "#EDEBE7", marginBottom: 6, width: "70%", animation: "pulse 1.2s ease-in-out infinite" }} />
+      ) : (
+        <p
+          onClick={() => item.url && window.open(item.url, "_blank")}
+          style={{ fontSize: 13, fontWeight: 500, color: "#444441", lineHeight: 1.4, wordBreak: "break-word", cursor: item.url ? "pointer" : "default", marginBottom: 6 }}
+        >
+          {displayTitle}
+        </p>
+      )}
 
       {/* URL line */}
       {item.url && displayTitle !== item.url && (
