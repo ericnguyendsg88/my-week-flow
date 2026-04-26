@@ -128,6 +128,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
   // ── Resizable panels ──
   const containerRef = useRef<HTMLDivElement>(null);
   const [leftPanelWidth, setLeftPanelWidth] = useState(380);
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
   const isDragging = useRef(false);
   const MIN_LEFT = 260;
   const MIN_COL_WIDTH = 120;
@@ -487,20 +488,38 @@ const HorizonApp = ({ userId }: { userId: string }) => {
       {/* ── LEFT PANEL ── */}
       <div
         className="flex shrink-0 flex-col overflow-hidden"
-        style={{ width: leftPanelWidth, minWidth: MIN_LEFT, maxWidth: 520, background: "#F4F1ED", borderRadius: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
+        style={{
+          width: leftCollapsed ? 0 : leftPanelWidth,
+          minWidth: leftCollapsed ? 0 : MIN_LEFT,
+          maxWidth: 520,
+          background: "#F4F1ED",
+          borderRadius: 20,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+          transition: "width 0.22s cubic-bezier(0.4,0,0.2,1), min-width 0.22s",
+          opacity: leftCollapsed ? 0 : 1,
+        }}
       >
         {/* Header */}
         <div style={{ padding: "24px 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h1 style={{ fontSize: 24, fontWeight: 600, color: "hsl(var(--foreground))" }}>Horizon</h1>
-          {viewMode === "focus" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {viewMode === "focus" && (
+              <button
+                onClick={() => setViewMode("week")}
+                title="Exit focus mode"
+                style={{ background: "rgba(123,115,214,0.1)", border: "none", borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 600, color: "#7B73D6", cursor: "pointer", letterSpacing: "0.03em" }}
+              >
+                ← week
+              </button>
+            )}
             <button
-              onClick={() => setViewMode("week")}
-              title="Exit focus mode"
-              style={{ background: "rgba(123,115,214,0.1)", border: "none", borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 600, color: "#7B73D6", cursor: "pointer", letterSpacing: "0.03em" }}
-            >
-              ← week
-            </button>
-          )}
+              onClick={() => setLeftCollapsed(true)}
+              title="Collapse sidebar"
+              style={{ background: "transparent", border: "none", borderRadius: 8, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#AAA", fontSize: 16, lineHeight: 1 }}
+              onMouseEnter={e => (e.currentTarget.style.background = "rgba(0,0,0,0.06)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+            >‹</button>
+          </div>
         </div>
 
         {/* Analog clock in focus mode */}
@@ -678,14 +697,24 @@ const HorizonApp = ({ userId }: { userId: string }) => {
         </div>
       </div>
 
-      {/* ── RESIZE HANDLE ── */}
-      <div onMouseDown={handleResizeMouseDown} style={{ width: 16, flexShrink: 0, cursor: "col-resize", display: "flex", alignItems: "center", justifyContent: "center", userSelect: "none" }}>
-        <div
-          style={{ width: 3, height: 40, borderRadius: 2, background: "rgba(0,0,0,0.10)", transition: "background 0.15s" }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(0,0,0,0.22)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(0,0,0,0.10)")}
-        />
-      </div>
+      {/* ── RESIZE HANDLE / EXPAND BUTTON ── */}
+      {leftCollapsed ? (
+        <button
+          onClick={() => setLeftCollapsed(false)}
+          title="Expand sidebar"
+          style={{ width: 20, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "none", cursor: "pointer", color: "#AAA", fontSize: 16, borderRadius: 8, transition: "color 0.15s" }}
+          onMouseEnter={e => (e.currentTarget.style.color = "#555")}
+          onMouseLeave={e => (e.currentTarget.style.color = "#AAA")}
+        >›</button>
+      ) : (
+        <div onMouseDown={handleResizeMouseDown} style={{ width: 16, flexShrink: 0, cursor: "col-resize", display: "flex", alignItems: "center", justifyContent: "center", userSelect: "none" }}>
+          <div
+            style={{ width: 3, height: 40, borderRadius: 2, background: "rgba(0,0,0,0.10)", transition: "background 0.15s" }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(0,0,0,0.22)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(0,0,0,0.10)")}
+          />
+        </div>
+      )}
 
       {/* ── RIGHT PANEL ── */}
       <div
