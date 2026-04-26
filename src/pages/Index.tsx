@@ -188,19 +188,28 @@ const HorizonApp = ({ userId }: { userId: string }) => {
     setCaptureSyncUser(userId);
     syncCapturesFromRemote(userId);
 
-    if (didPull.current) return;
-    didPull.current = true;
-    pullEvents(userId).then((remote) => {
-      if (!remote || remote.length === 0) return;
-      const local: CalEvent[] = (() => {
-        try { return JSON.parse(localStorage.getItem("horizon_events") ?? "[]"); } catch { return []; }
-      })();
-      const localIds = new Set(local.map((e) => e.id));
-      const merged = [...local, ...remote.filter((e) => !localIds.has(e.id))];
-      if (merged.length !== local.length) {
+    if (!didPull.current) {
+      didPull.current = true;
+      pullEvents(userId).then((remote) => {
+        if (!remote || remote.length === 0) return;
+        const local: CalEvent[] = (() => {
+          try { return JSON.parse(localStorage.getItem("horizon_events") ?? "[]"); } catch { return []; }
+        })();
+        const remoteIds = new Set(remote.map((e) => e.id));
+        // Prefer remote for shared IDs; keep local-only events too
+        const merged = [...remote, ...local.filter((e) => !remoteIds.has(e.id))];
         dispatch({ type: "PUSH", events: merged });
-      }
-    });
+      });
+    }
+
+    // Realtime subscriptions — keep this device in sync with other devices
+    const unsubEvents = subscribeEvents(
+      userId,
+      (e) => dispatchRef.current?.({ type: "REMOTE_UPSERT", event: e }),
+      (id) => dispatchRef.current?.({ type: "REMOTE_DELETE", id }),
+    );
+    const unsubCaps = subscribeCaptures(userId, applyRemoteCapture, applyRemoteCaptureDelete);
+    return () => { unsubEvents(); unsubCaps(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
