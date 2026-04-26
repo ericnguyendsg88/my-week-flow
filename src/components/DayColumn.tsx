@@ -63,6 +63,7 @@ interface Props {
   isSelected?: boolean;
   focusMode?: boolean;
   compact?: boolean;
+  privacyMode?: boolean;
 }
 
 const DAY_START = 6 * 60;   // 6am
@@ -214,7 +215,7 @@ function TaskPill({ task, timelineRef }: { task: CaptureItem; timelineRef: React
   );
 }
 
-export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete, onResize, onUpdate, onCreate, onMoveToDay, onCopyEvent, onSelectEvent, onDayClick, isSelected, focusMode, compact }: Props) {
+export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete, onResize, onUpdate, onCreate, onMoveToDay, onCopyEvent, onSelectEvent, onDayClick, isSelected, focusMode, compact, privacyMode }: Props) {
   const isT = isToday(date);
   const isTom = isTomorrow(date);
   const isWeekend = date.getDay() === 0 || date.getDay() === 6;
@@ -981,7 +982,62 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
         )}
 
         {/* Events */}
-        {compact ? (
+        {privacyMode ? (
+          // Privacy mode: shimmer bars, no titles
+          <>
+            {sorted.map((ev) => (
+              <div
+                key={ev.id}
+                style={{
+                  position: "absolute",
+                  top: timeToY(ev.start),
+                  left: 0, right: 0,
+                  height: Math.max(ev.duration, 30),
+                  borderRadius: 10,
+                  background: "linear-gradient(90deg, #E5E2DC 0%, #EDEBE7 40%, #E5E2DC 100%)",
+                  backgroundSize: "200% 100%",
+                  animation: "shimmer 1.8s ease-in-out infinite",
+                  zIndex: 10,
+                  overflow: "hidden",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "flex-end",
+                  padding: "6px 8px 4px",
+                }}
+              >
+                <div style={{ height: 7, borderRadius: 4, background: "rgba(0,0,0,0.08)", width: "65%", marginBottom: 4 }} />
+                <div style={{ height: 5, borderRadius: 3, background: "rgba(0,0,0,0.05)", width: "40%" }} />
+              </div>
+            ))}
+            {/* Open section pills for empty sections */}
+            {(["MORNING", "AFTERNOON", "EVENING"] as const).map((section) => {
+              const sectionStart = section === "MORNING" ? 6 * 60 : section === "AFTERNOON" ? 12 * 60 : 18 * 60;
+              const sectionEnd   = section === "MORNING" ? 12 * 60 : section === "AFTERNOON" ? 18 * 60 : 24 * 60;
+              const hasEvent = sorted.some(e => e.start >= sectionStart && e.start < sectionEnd);
+              if (hasEvent) return null;
+              const pillY = timeToY(sectionStart) + (section === "MORNING" ? 20 : 16);
+              return (
+                <div
+                  key={section}
+                  style={{
+                    position: "absolute",
+                    top: pillY,
+                    left: 8, right: 8,
+                    height: 28,
+                    borderRadius: 8,
+                    border: "1.5px dashed #C8C4BE",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 10, fontWeight: 500, color: "#A8A4A0",
+                    pointerEvents: "none",
+                    zIndex: 5,
+                  }}
+                >
+                  open
+                </div>
+              );
+            })}
+          </>
+        ) : compact ? (
           // Compact mode: small dot pills at event time
           sorted.map((ev) => {
             const colors = tagColors(ev.tagId);

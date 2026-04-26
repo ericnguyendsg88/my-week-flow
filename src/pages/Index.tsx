@@ -23,6 +23,7 @@ import { DayColumn } from "@/components/DayColumn";
 import { Backpack } from "@/components/Backpack";
 
 import { MonthView } from "@/components/MonthView";
+import { AnalogClock } from "@/components/AnalogClock";
 import { nowMinutes, minutesToLabel } from "@/lib/event-utils";
 import { useCaptures, useUnplacedCount, setCaptureSyncUser, syncCapturesFromRemote, applyRemoteCapture, applyRemoteCaptureDelete } from "@/lib/capture-store";
 import { pullEvents, pushEvents, deleteEvent as sbDeleteEvent, useSyncStatus, subscribeEvents, subscribeCaptures } from "@/lib/sync";
@@ -344,6 +345,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
   const unplaced = useUnplacedCount(todayKey);
   const allCaptures = useCaptures();
   const [compactMode, setCompactMode] = useState(false);
+  const [privacyMode, setPrivacyMode] = useState(false);
   const sync = useSyncStatus();
 
   // ── Left panel date navigation ──
@@ -671,10 +673,10 @@ const HorizonApp = ({ userId }: { userId: string }) => {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.88, y: -8 }}
               transition={{ type: "spring", stiffness: 340, damping: 26 }}
-              style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingBottom: 16, gap: 8 }}
+              style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingBottom: 16, gap: 10 }}
             >
-              <div style={{ width: 148, height: 148, borderRadius: "50%", background: "hsl(var(--muted))" }} />
-              <div style={{ fontSize: 12, fontWeight: 600, color: "#7B73D6", letterSpacing: "0.04em", opacity: 0.8 }}>
+              <AnalogClock size={148} />
+              <div style={{ fontSize: 12, fontWeight: 500, fontFamily: "'Lora', Georgia, serif", color: "#7B73D6", letterSpacing: "0.01em", opacity: 0.85 }}>
                 {format(focusDate, "EEEE, MMMM d")}
               </div>
             </motion.div>
@@ -697,7 +699,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                     <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#B6DFB0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#3A8733" }} />
                     </span>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: "#1D5C17", whiteSpace: "nowrap" }}>Now · {nowTime}</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, fontFamily: "'Lora', Georgia, serif", color: "#1D5C17", whiteSpace: "nowrap" }}>Now · {nowTime}</span>
                     <div style={{ width: 1, height: 14, background: "#B6DFB0", opacity: 0.6, flexShrink: 0 }} />
                     <span style={{ fontSize: 12, fontWeight: 500, color: "#3A8733", whiteSpace: "nowrap" }}>{timeOfDay}</span>
                   </div>
@@ -727,8 +729,8 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                 </div>
               ) : (
                 <div>
-                  <p style={{ fontSize: 14, fontWeight: 600, fontFamily: "'Lora', Georgia, serif", color: "#1D5C17", lineHeight: 1.2 }}>{format(selectedDate, "EEEE")}</p>
-                  <p style={{ fontSize: 11, color: "#3A8733", marginTop: 2, fontWeight: 500 }}>{format(selectedDate, "MMM d, yyyy")}</p>
+                  <p style={{ fontSize: 14, fontWeight: 600, fontFamily: "'Lora', Georgia, serif", color: "#1D5C17", lineHeight: 1.2 }}>{format(selectedDate, "EEEE, MMMM d")}</p>
+                  <p style={{ fontSize: 11, color: "#3A8733", marginTop: 2, fontWeight: 400, fontFamily: "'Lora', Georgia, serif" }}>{format(selectedDate, "yyyy")}</p>
                 </div>
               )}
             </div>
@@ -1011,6 +1013,26 @@ const HorizonApp = ({ userId }: { userId: string }) => {
               </motion.div>
             )}
 
+            {/* Privacy toggle */}
+            {viewMode !== "month" && (
+              <button
+                onClick={() => setPrivacyMode((v) => !v)}
+                title={privacyMode ? "Show event details" : "Hide event details (privacy mode)"}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  height: 32, borderRadius: 20, padding: "0 14px",
+                  background: privacyMode ? "#3C3489" : "#fff",
+                  border: privacyMode ? "1px solid #3C3489" : "1px solid #EAEAEA",
+                  color: privacyMode ? "#fff" : "#3C3489",
+                  cursor: "pointer", fontSize: 12, fontWeight: 600,
+                  transition: "all 0.15s",
+                }}
+              >
+                <EyeOff size={13} strokeWidth={2} />
+                {privacyMode ? "show" : "hide"}
+              </button>
+            )}
+
             {/* Compact toggle */}
             {viewMode !== "month" && (
               <button
@@ -1133,6 +1155,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                   onCopyEvent={handleCopyEvent}
                   onSelectEvent={handleSelectEvent}
                   compact={compactMode}
+                  privacyMode={privacyMode}
                   focusMode={viewMode === "focus"}
                   selectedDayKey={selectedDayKey}
                   onDayClick={(date) => {
@@ -1154,6 +1177,32 @@ const HorizonApp = ({ userId }: { userId: string }) => {
             )}
           </AnimatePresence>
         </div>
+
+        {/* Privacy mode banner */}
+        {privacyMode && (
+          <div style={{
+            margin: "0 24px 12px",
+            background: "#EEEDFE",
+            border: "1px solid #C5BEF5",
+            borderRadius: 14,
+            padding: "10px 18px",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            flexShrink: 0,
+          }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#534AB7", flexShrink: 0 }} />
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: "#3C3489", fontFamily: "'Lora', Georgia, serif" }}>
+              privacy mode on — event details hidden from view
+            </span>
+            <button
+              onClick={() => setPrivacyMode(false)}
+              style={{ background: "none", border: "none", fontSize: 12, fontWeight: 600, color: "#534AB7", cursor: "pointer", padding: "2px 6px", borderRadius: 8, whiteSpace: "nowrap" }}
+            >
+              show →
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Completion Prompt */}
@@ -1313,7 +1362,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
 };
 
 /* ── Week Grid ── */
-function WeekGrid({ weekDates, events, tags, allCaptures, onMark, onDelete, onResize, onUpdate, onCreate, onMoveToDay, onCopyEvent, onSelectEvent, compact, focusMode, selectedDayKey, onDayClick }: {
+function WeekGrid({ weekDates, events, tags, allCaptures, onMark, onDelete, onResize, onUpdate, onCreate, onMoveToDay, onCopyEvent, onSelectEvent, compact, privacyMode, focusMode, selectedDayKey, onDayClick }: {
   weekDates: Date[];
   events: CalEvent[];
   tags: Tag[];
@@ -1327,6 +1376,7 @@ function WeekGrid({ weekDates, events, tags, allCaptures, onMark, onDelete, onRe
   onCopyEvent: (event: CalEvent) => void;
   onSelectEvent?: (event: CalEvent | null) => void;
   compact?: boolean;
+  privacyMode?: boolean;
   focusMode?: boolean;
   selectedDayKey?: string;
   onDayClick?: (date: Date) => void;
@@ -1356,6 +1406,7 @@ function WeekGrid({ weekDates, events, tags, allCaptures, onMark, onDelete, onRe
               onCopyEvent={onCopyEvent}
               onSelectEvent={onSelectEvent}
               compact={compact}
+              privacyMode={privacyMode}
               focusMode={focusMode}
               isSelected={dateKey === selectedDayKey}
               onDayClick={onDayClick}

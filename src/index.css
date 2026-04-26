@@ -250,6 +250,11 @@
     50% { opacity: 0.6; transform: scale(0.85); }
   }
 
+  @keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
   @keyframes spin {
     to { transform: rotate(360deg); }
   }
