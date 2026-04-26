@@ -36,11 +36,26 @@ function emit() {
 
 export async function syncCapturesFromRemote(userId: string) {
   const remote = await pullCaptures(userId);
-  if (!remote || remote.length === 0) return;
-  const localIds = new Set(store.map((c) => c.id));
-  const newRemote = remote.filter((c) => !localIds.has(c.id));
-  if (newRemote.length === 0) return;
-  store = [...store, ...newRemote];
+  if (!remote) return;
+  const remoteIds = new Set(remote.map((c) => c.id));
+  const localOnly = store.filter((c) => !remoteIds.has(c.id));
+  store = [...remote, ...localOnly];
+  save(store);
+  listeners.forEach((l) => l());
+}
+
+// Apply a remote upsert without re-pushing
+export function applyRemoteCapture(c: CaptureItem) {
+  const idx = store.findIndex((x) => x.id === c.id);
+  if (idx === -1) store = [c, ...store];
+  else store = store.map((x) => (x.id === c.id ? c : x));
+  save(store);
+  listeners.forEach((l) => l());
+}
+
+export function applyRemoteCaptureDelete(id: string) {
+  if (!store.some((c) => c.id === id)) return;
+  store = store.filter((c) => c.id !== id);
   save(store);
   listeners.forEach((l) => l());
 }
