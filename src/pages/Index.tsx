@@ -489,22 +489,42 @@ const HorizonApp = ({ userId }: { userId: string }) => {
   return (
     <div
       ref={containerRef}
-      style={{ background: "#F4F4F6", padding: "16px" }}
-      className="flex h-screen w-full items-stretch overflow-hidden"
+      style={{
+        background: "#F4F4F6",
+        padding: isMobile ? "8px 8px 76px" : "16px",
+      }}
+      className={
+        isMobile
+          ? "flex h-screen w-full flex-col items-stretch overflow-hidden"
+          : "flex h-screen w-full items-stretch overflow-hidden"
+      }
     >
       {/* ── LEFT PANEL ── */}
       <div
-        className="flex shrink-0 flex-col overflow-hidden"
-        style={{
-          width: leftCollapsed ? 0 : leftPanelWidth,
-          minWidth: leftCollapsed ? 0 : MIN_LEFT,
-          maxWidth: 520,
-          background: "#F4F1ED",
-          borderRadius: 20,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-          transition: "width 0.22s cubic-bezier(0.4,0,0.2,1), min-width 0.22s",
-          opacity: leftCollapsed ? 0 : 1,
-        }}
+        className="flex flex-col overflow-hidden"
+        style={
+          isMobile
+            ? {
+                display: mobileTab === "backpack" ? "flex" : "none",
+                flex: 1,
+                minHeight: 0,
+                width: "100%",
+                background: "#F4F1ED",
+                borderRadius: 16,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+              }
+            : {
+                width: leftCollapsed ? 0 : leftPanelWidth,
+                minWidth: leftCollapsed ? 0 : MIN_LEFT,
+                maxWidth: 520,
+                background: "#F4F1ED",
+                borderRadius: 20,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                transition: "width 0.22s cubic-bezier(0.4,0,0.2,1), min-width 0.22s",
+                opacity: leftCollapsed ? 0 : 1,
+                flexShrink: 0,
+              }
+        }
       >
         {/* Header */}
         <div style={{ padding: "24px 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
