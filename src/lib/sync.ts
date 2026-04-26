@@ -122,6 +122,31 @@ export async function pullEvents(userId: string): Promise<CalEvent[] | null> {
   return (data as DbEvent[]).map(rowToEvent);
 }
 
+export function subscribeEvents(
+  userId: string,
+  onUpsert: (e: CalEvent) => void,
+  onDelete: (id: string) => void,
+) {
+  if (!supabaseConfigured) return () => {};
+  const channel = supabase
+    .channel(`events:${userId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "events", filter: `user_id=eq.${userId}` },
+      (payload) => {
+        if (payload.eventType === "DELETE") {
+          const id = (payload.old as DbEvent | null)?.id;
+          if (id) onDelete(id);
+        } else {
+          const row = payload.new as DbEvent | null;
+          if (row) onUpsert(rowToEvent(row));
+        }
+      },
+    )
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}
+
 // ── Captures ─────────────────────────────────────────────────────────
 
 type DbCapture = {
