@@ -1051,6 +1051,84 @@ const HorizonApp = ({ userId }: { userId: string }) => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── MOBILE BOTTOM TAB BAR ── */}
+      {isMobile && (
+        <nav
+          style={{
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            background: "rgba(255,255,255,0.96)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            borderTop: "1px solid hsl(var(--border))",
+            padding: "8px 16px calc(8px + env(safe-area-inset-bottom))",
+            display: "flex",
+            gap: 8,
+            zIndex: 250,
+            boxShadow: "0 -2px 12px rgba(0,0,0,0.04)",
+          }}
+        >
+          {([
+            { id: "backpack", label: "Capture", Icon: Sparkles, badge: unplaced },
+            { id: "calendar", label: "Calendar", Icon: CalendarRange, badge: 0 },
+          ] as const).map(({ id, label, Icon, badge }) => {
+            const active = mobileTab === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setMobileTab(id)}
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 4,
+                  background: active ? "rgba(123,115,214,0.12)" : "transparent",
+                  border: "none",
+                  borderRadius: 14,
+                  padding: "8px 0",
+                  cursor: "pointer",
+                  color: active ? "#3C3489" : "#888",
+                  fontSize: 11,
+                  fontWeight: active ? 600 : 500,
+                  position: "relative",
+                  transition: "all 0.15s",
+                }}
+              >
+                <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
+                <span>{label}</span>
+                {badge > 0 && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: 4,
+                      right: "calc(50% - 22px)",
+                      background: "#7B73D6",
+                      color: "#fff",
+                      fontSize: 9,
+                      fontWeight: 700,
+                      borderRadius: 9,
+                      minWidth: 16,
+                      height: 16,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "0 4px",
+                      lineHeight: 1,
+                    }}
+                  >
+                    {badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      )}
     </div>
   );
 };
