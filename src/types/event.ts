@@ -113,8 +113,6 @@ export interface CaptureItem {
   ogImage?: string;
   ogSite?: string;
   ogLoading?: boolean;
-  /** For timed tasks pinned to the timeline — minutes since midnight */
-  start?: number;
 }
 
 export const DURATIONS = [15, 30, 45, 60, 90, 120];

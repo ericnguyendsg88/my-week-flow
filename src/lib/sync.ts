@@ -21,7 +21,10 @@ export function subscribeSyncStatus(l: () => void) {
 }
 export function useSyncStatus() {
   const [s, setS] = useState(getSyncStatus);
-  useEffect(() => subscribeSyncStatus(() => setS(getSyncStatus())), []);
+  useEffect(() => {
+    const unsub = subscribeSyncStatus(() => setS(getSyncStatus()));
+    return () => { unsub; };
+  }, []);
   return s;
 }
 
