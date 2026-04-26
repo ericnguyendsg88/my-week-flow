@@ -23,7 +23,10 @@ import { Backpack } from "@/components/Backpack";
 import { AnalogClock } from "@/components/AnalogClock";
 import { MonthView } from "@/components/MonthView";
 import { nowMinutes, minutesToLabel } from "@/lib/event-utils";
-import { useCaptures, useUnplacedCount } from "@/lib/capture-store";
+import { useCaptures, useUnplacedCount, setCaptureSyncUser, syncCapturesFromRemote } from "@/lib/capture-store";
+import { pullEvents, pushEvents, deleteEvent as sbDeleteEvent, useSyncStatus } from "@/lib/sync";
+import { AuthGate } from "@/components/AuthGate";
+import { supabase } from "@/lib/supabase";
 
 // ── Undo/Redo history reducer ──────────────────────────────────────
 type HistoryState = {
@@ -58,7 +61,39 @@ function historyReducer(state: HistoryState, action: HistoryAction): HistoryStat
   }
 }
 
+function useAuth() {
+  const [userId, setUserId] = useState<string | null>(null);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setUserId(data.session?.user.id ?? null);
+      setChecking(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUserId(session?.user.id ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  return { userId, checking };
+}
+
 const Index = () => {
+  const { userId, checking } = useAuth();
+
+  if (checking) return (
+    <div style={{ minHeight: "100vh", background: "#F4F1ED", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid #CECBF6", borderTopColor: "#3C3489", animation: "spin 0.7s linear infinite" }} />
+    </div>
+  );
+
+  if (!userId) return <AuthGate onAuth={() => supabase.auth.getSession()} />;
+
+  return <HorizonApp userId={userId} />;
+};
+
+const HorizonApp = ({ userId }: { userId: string }) => {
   const today = startOfDay(new Date());
   const [weekWindowMode, setWeekWindowMode] = useState<"today-partial" | "today-bridge" | "calendar">("today-partial");
   const [currentWeekStart, setCurrentWeekStart] = useState(() => today);
@@ -137,6 +172,39 @@ const Index = () => {
     localStorage.setItem("horizon_events", JSON.stringify(events));
   }, [events]);
 
+  // ── Supabase sync ──
+  // On mount: set userId for capture store, pull remote data and merge
+  const didPull = useRef(false);
+  useEffect(() => {
+    setCaptureSyncUser(userId);
+    syncCapturesFromRemote(userId);
+
+    if (didPull.current) return;
+    didPull.current = true;
+    pullEvents(userId).then((remote) => {
+      if (!remote || remote.length === 0) return;
+      const local: CalEvent[] = (() => {
+        try { return JSON.parse(localStorage.getItem("horizon_events") ?? "[]"); } catch { return []; }
+      })();
+      const localIds = new Set(local.map((e) => e.id));
+      const merged = [...local, ...remote.filter((e) => !localIds.has(e.id))];
+      if (merged.length !== local.length) {
+        dispatch({ type: "PUSH", events: merged });
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  // Push entire events list to Supabase whenever it changes (debounced 800ms)
+  const syncTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => {
+      pushEvents(events, userId);
+    }, 800);
+    return () => clearTimeout(syncTimer.current);
+  }, [events, userId]);
+
   // ── Toast ──
   const [toast, setToast] = useState<{ message: string } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -187,6 +255,7 @@ const Index = () => {
   const handleDelete = useCallback((eventId: string) => {
     const deleted = events.find((e) => e.id === eventId);
     dispatch({ type: "PUSH", events: events.filter((e) => e.id !== eventId) });
+    sbDeleteEvent(eventId);
     showToast(`"${deleted?.title ?? "Event"}" deleted — Cmd+Z to undo`);
   }, [events]);
 
@@ -229,6 +298,7 @@ const Index = () => {
   const unplaced = useUnplacedCount(todayKey);
   const allCaptures = useCaptures();
   const [compactMode, setCompactMode] = useState(false);
+  const sync = useSyncStatus();
 
   // ── Left panel date navigation ──
   const [selectedDate, setSelectedDate] = useState<Date>(today);
@@ -655,6 +725,35 @@ const Index = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Supabase sync status */}
+            <div title={sync.error ?? undefined} style={{
+              display: "flex", alignItems: "center", gap: 5,
+              background: sync.status === "ok" ? "#EAF3DE"
+                : sync.status === "error" ? "#FEF0EE"
+                : sync.status === "syncing" ? "#EEEDFE"
+                : "#F0EDE8",
+              borderRadius: 20, padding: "4px 10px",
+              fontSize: 11, fontWeight: 600,
+              color: sync.status === "ok" ? "#27500A"
+                : sync.status === "error" ? "#C0392B"
+                : sync.status === "syncing" ? "#3C3489"
+                : "#888",
+              transition: "all 0.3s",
+            }}>
+              <span style={{
+                width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                background: sync.status === "ok" ? "#3B6D11"
+                  : sync.status === "error" ? "#C0392B"
+                  : sync.status === "syncing" ? "#7B73D6"
+                  : "#C8C4BE",
+                animation: sync.status === "syncing" ? "pulse 1s ease-in-out infinite" : "none",
+              }} />
+              {sync.status === "ok" ? "synced"
+                : sync.status === "error" ? "sync error"
+                : sync.status === "syncing" ? "syncing…"
+                : "not synced"}
+            </div>
+
             {unplaced > 0 && (
               <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                 style={{ display: "flex", alignItems: "center", gap: 6, background: "#E8EDFD", borderRadius: 20, padding: "5px 12px", fontSize: 12, fontWeight: 500, color: "#3D68CC" }}>

@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { CaptureItem, CaptureKind } from "@/types/event";
+import { pushCaptures, deleteCapture as sbDeleteCapture, pullCaptures } from "./sync";
+
+let currentUserId: string | null = null;
+export function setCaptureSyncUser(uid: string | null) { currentUserId = uid; }
 
 const STORAGE_KEY = "horizon_backpack";
 
@@ -20,7 +24,23 @@ function save(items: CaptureItem[]) {
 let store: CaptureItem[] = load();
 const listeners = new Set<() => void>();
 
+let syncTimer: ReturnType<typeof setTimeout> | undefined;
+
 function emit() {
+  save(store);
+  listeners.forEach((l) => l());
+  // debounced push to Supabase
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => { if (currentUserId) pushCaptures(store, currentUserId); }, 800);
+}
+
+export async function syncCapturesFromRemote(userId: string) {
+  const remote = await pullCaptures(userId);
+  if (!remote || remote.length === 0) return;
+  const localIds = new Set(store.map((c) => c.id));
+  const newRemote = remote.filter((c) => !localIds.has(c.id));
+  if (newRemote.length === 0) return;
+  store = [...store, ...newRemote];
   save(store);
   listeners.forEach((l) => l());
 }
@@ -47,6 +67,7 @@ export function addCapture(input: {
 export function removeCapture(id: string) {
   store = store.filter((c) => c.id !== id);
   emit();
+  sbDeleteCapture(id);
 }
 
 export function patchCapture(id: string, patch: Partial<CaptureItem>) {

@@ -9,11 +9,14 @@ import {
   endOfWeek,
   eachDayOfInterval,
   isSameMonth,
+  isToday,
+  isTomorrow,
 } from "date-fns";
 import { CalEvent, Tag, DURATIONS } from "@/types/event";
 import {
   guessCategory,
   guessDuration,
+  guessInputType,
   suggestStart,
   durationLabel,
   minutesToLabel,
@@ -21,8 +24,9 @@ import {
 } from "@/lib/event-utils";
 import { tagForCategory } from "@/lib/tags";
 import { addCapture } from "@/lib/capture-store";
+import { Textarea } from "@/components/ui/textarea";
 
-type Step = "idle" | "linkPrompt" | "type" | "day" | "time" | "duration" | "tag" | "location" | "people" | "confirm";
+type Step = "idle" | "linkPrompt" | "type" | "day" | "time" | "duration" | "tag" | "location" | "people" | "confirm" | "taskDay" | "taskTag" | "taskConfirm";
 
 const COLOR_MAP: Record<string, { bg: string; text: string }> = {
   purple: { bg: "#AFA9EC", text: "#3C3489" },
@@ -242,6 +246,13 @@ function parseDuration(text: string): number {
   return 0;
 }
 
+function normalizeEventTitle(text: string) {
+  return text
+    .replace(/\*\*/g, "")
+    .replace(/\s*\n+\s*/g, " ")
+    .trim();
+}
+
 const STEP_BACK: Partial<Record<Step, Step>> = {
   linkPrompt: "idle",
   type: "idle",
@@ -252,14 +263,17 @@ const STEP_BACK: Partial<Record<Step, Step>> = {
   location: "tag",
   people: "location",
   confirm: "people",
+  taskDay: "idle",
+  taskTag: "taskDay",
+  taskConfirm: "taskTag",
 };
 
-const SKIPPABLE: Step[] = ["day", "time", "duration", "tag", "location", "people"];
+const SKIPPABLE: Step[] = ["day", "time", "duration", "tag", "location", "people", "taskDay", "taskTag"];
 
 export function TaskComposer({ weekDates, events, tags, onCommit, prefill }: Props) {
   const [text, setText] = useState("");
   const [step, setStep] = useState<Step>("idle");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [showCalendar, setShowCalendar] = useState(false);
   const [draftDate, setDraftDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [draftStart, setDraftStart] = useState(0);
@@ -268,6 +282,8 @@ export function TaskComposer({ weekDates, events, tags, onCommit, prefill }: Pro
   const [draftLocation, setDraftLocation] = useState("");
   const [draftPeople, setDraftPeople] = useState("");
   const [customDurText, setCustomDurText] = useState("");
+
+  const detectedType = step === "idle" ? guessInputType(text) : null;
 
   // When a prefill arrives from outside (e.g. from backpack), auto-start wizard
   const lastPrefill = useRef<string | undefined>();
@@ -311,6 +327,8 @@ export function TaskComposer({ weekDates, events, tags, onCommit, prefill }: Pro
     else if (step === "tag") setStep("location");
     else if (step === "location") setStep("people");
     else if (step === "people") setStep("confirm");
+    else if (step === "taskDay") setStep("taskTag");
+    else if (step === "taskTag") setStep("taskConfirm");
   }
 
   function handleInput(val: string) {
@@ -321,17 +339,24 @@ export function TaskComposer({ weekDates, events, tags, onCommit, prefill }: Pro
   function startWizard() {
     if (!text.trim()) return;
     if (URL_REGEX.test(text.trim())) { setStep("linkPrompt"); return; }
+    const kind = guessInputType(text);
     setDraftDate(format(new Date(), "yyyy-MM-dd"));
     setDraftDuration(guessDuration(text));
     setDraftTag(tagForCategory(guessCategory(text)));
-    setStep("type");
+    if (kind === "event") {
+      setStep("day");
+    } else if (kind === "task") {
+      setStep("taskDay");
+    } else {
+      setStep("type");
+    }
   }
 
   function commit() {
     const start = draftStart || suggestStart(events, draftDate, draftDuration);
     onCommit({
       id: crypto.randomUUID(),
-      title: text.trim(),
+      title: normalizeEventTitle(text),
       category: "work",
       tagId: draftTag,
       date: draftDate,
@@ -343,6 +368,29 @@ export function TaskComposer({ weekDates, events, tags, onCommit, prefill }: Pro
     reset();
   }
 
+  function commitTask() {
+    addCapture({ kind: "task", title: text.trim(), tagId: draftTag || undefined, dayKey: draftDate });
+    reset();
+  }
+
+  function toggleBold() {
+    const el = inputRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? text.length;
+    const end = el.selectionEnd ?? text.length;
+    const selected = text.slice(start, end);
+    const replacement = `**${selected || "bold"}**`;
+    const next = text.slice(0, start) + replacement + text.slice(end);
+    setText(next);
+    if (step !== "idle") setStep("idle");
+    setTimeout(() => {
+      el.focus();
+      const cursorStart = start + 2;
+      const cursorEnd = start + replacement.length - 2;
+      el.setSelectionRange(selected ? cursorStart : cursorStart, selected ? cursorEnd : cursorEnd);
+    }, 0);
+  }
+
   // Keyboard shortcuts
   useEffect(() => {
     if (step === "idle") return;
@@ -350,6 +398,7 @@ export function TaskComposer({ weekDates, events, tags, onCommit, prefill }: Pro
       if (e.key === "Escape") { goBack(); return; }
       if (e.key === "Tab") { e.preventDefault(); if (SKIPPABLE.includes(step)) skipStep(); return; }
       if (e.key === "Enter" && step === "confirm") { commit(); return; }
+      if (e.key === "Enter" && step === "taskConfirm") { commitTask(); return; }
 
       const num = parseInt(e.key);
       if (isNaN(num) || num < 1) return;
@@ -360,7 +409,10 @@ export function TaskComposer({ weekDates, events, tags, onCommit, prefill }: Pro
         if (idx === 1) { setDraftDate(format(new Date(), "yyyy-MM-dd")); setDraftDuration(guessDuration(text)); setDraftTag(tagForCategory(guessCategory(text))); setStep("type"); }
       } else if (step === "type") {
         if (idx === 0) setStep("day");
-        if (idx === 1) { addCapture({ kind: "thought", title: text.trim(), dayKey: format(new Date(), "yyyy-MM-dd") }); reset(); }
+        if (idx === 1) setStep("taskDay");
+        if (idx === 2) { addCapture({ kind: "thought", title: text.trim(), dayKey: format(new Date(), "yyyy-MM-dd") }); reset(); }
+      } else if (step === "taskConfirm") {
+        if (idx === 0) commitTask();
       } else if (step === "duration") {
         if (DURATIONS[idx]) { setDraftDuration(DURATIONS[idx]); setStep("tag"); }
       } else if (step === "tag") {
@@ -381,27 +433,68 @@ export function TaskComposer({ weekDates, events, tags, onCommit, prefill }: Pro
 
   const confirmTag = tags.find((t) => t.id === draftTag);
 
+  const inputBorderColor =
+    step !== "idle" ? "hsl(var(--border))"
+    : detectedType === "event" ? "#7B73D6"
+    : detectedType === "task" ? "#3A8A5F"
+    : "hsl(var(--border))";
+
+  const typeBadge =
+    detectedType === "event" ? { label: "event", bg: "#EBE8FC", color: "#3C3489" }
+    : detectedType === "task" ? { label: "task", bg: "#D6F5E8", color: "#1A5C3A" }
+    : null;
+
   return (
     <div
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
       style={{ background: "#F9F9F9", border: "1px solid hsl(var(--border))", borderRadius: 12, padding: 12 }}
     >
-      <div style={{ fontSize: 13, color: "hsl(var(--muted-foreground))", fontWeight: 500, marginBottom: 8 }}>
-        what's on your mind?
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontSize: 13, color: "hsl(var(--muted-foreground))", fontWeight: 500 }}>
+          what's on your mind?
+        </span>
+        {typeBadge && text.trim() && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
+            background: typeBadge.bg, color: typeBadge.color,
+            borderRadius: 20, padding: "2px 8px",
+            transition: "all 0.15s",
+          }}>
+            {typeBadge.label.toUpperCase()}
+          </span>
+        )}
       </div>
 
-      <input
+      <Textarea
         ref={inputRef}
         value={text}
         onChange={(e) => handleInput(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter" && step === "idle") startWizard(); }}
-        placeholder=""
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+            e.preventDefault();
+            toggleBold();
+            return;
+          }
+          if (e.key === "Enter" && !e.shiftKey && step === "idle") {
+            e.preventDefault();
+            startWizard();
+          }
+        }}
+        placeholder={
+          step === "idle"
+            ? detectedType === "event" ? "add an event — press Enter"
+              : detectedType === "task" ? "add a task — press Enter"
+              : ""
+            : ""
+        }
         disabled={step !== "idle"}
+        rows={3}
+        className="min-h-[88px] resize-none"
         style={{
           width: "100%",
           background: "#fff",
-          border: "1px solid hsl(var(--border))",
+          border: `1.5px solid ${inputBorderColor}`,
           borderRadius: 8,
           padding: "10px 12px",
           fontSize: 15,
@@ -410,13 +503,36 @@ export function TaskComposer({ weekDates, events, tags, onCommit, prefill }: Pro
           outline: "none",
           boxSizing: "border-box",
           opacity: step === "idle" ? 1 : 0.7,
+          transition: "border-color 0.2s",
         }}
       />
 
+      {step === "idle" && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={toggleBold}
+            style={{ borderRadius: 8, border: "1px solid rgba(0,0,0,0.08)", background: "#fff", color: "hsl(var(--foreground))", padding: "4px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+          >
+            Bold
+          </button>
+          <span style={{ fontSize: 10, color: "hsl(var(--muted-foreground))", fontWeight: 500 }}>
+            `Shift+Enter` new line · `Cmd/Ctrl+B` bold
+          </span>
+        </div>
+      )}
+
       {step !== "idle" && (
-        <div style={{ marginTop: 12, background: "#F3F0FE", borderRadius: 12, padding: 12 }}>
-          <p style={{ fontSize: 10, color: "#9D95DC", fontWeight: 700, letterSpacing: "0.06em", marginBottom: 10 }}>
-            HORIZON IS ASKING
+        <div style={{
+          marginTop: 12,
+          background: step.startsWith("task") ? "#EDF9F4" : "#F3F0FE",
+          borderRadius: 12,
+          padding: 12,
+          transition: "background 0.2s",
+        }}>
+          <p style={{ fontSize: 10, color: step.startsWith("task") ? "#3A8A5F" : "#9D95DC", fontWeight: 700, letterSpacing: "0.06em", marginBottom: 10 }}>
+            {step.startsWith("task") ? "TASK SETUP" : "HORIZON IS ASKING"}
           </p>
 
           {/* LINK PROMPT */}
@@ -432,12 +548,13 @@ export function TaskComposer({ weekDates, events, tags, onCommit, prefill }: Pro
             </>
           )}
 
-          {/* TYPE */}
+          {/* TYPE — shown only for ambiguous input */}
           {step === "type" && (
             <>
-              <p style={{ fontSize: 13, color: "#3C3489", fontWeight: 600, marginBottom: 8 }}>What kind of thing?</p>
+              <p style={{ fontSize: 13, color: "#3C3489", fontWeight: 600, marginBottom: 8 }}>What is this?</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                <OptionRow label="Event" sublabel="add to calendar" selected={false} onClick={() => setStep("day")} />
+                <OptionRow label="Event" sublabel="schedule on calendar" selected={false} onClick={() => setStep("day")} />
+                <OptionRow label="Task" sublabel="add to task list" selected={false} onClick={() => setStep("taskDay")} />
                 <OptionRow label="Thought" sublabel="save to backpack" selected={false}
                   onClick={() => { addCapture({ kind: "thought", title: text.trim(), dayKey: format(new Date(), "yyyy-MM-dd") }); reset(); }} />
               </div>
@@ -451,10 +568,11 @@ export function TaskComposer({ weekDates, events, tags, onCommit, prefill }: Pro
               <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 8 }}>
                 {weekDates.map((date) => {
                   const key = format(date, "yyyy-MM-dd");
+                  const label = isToday(date) ? "Today" : isTomorrow(date) ? "Tomorrow" : format(date, "EEEE");
                   return (
                     <OptionRow
                       key={key}
-                      label={format(date, "EEEE")}
+                      label={label}
                       sublabel={format(date, "MMM d")}
                       selected={draftDate === key}
                       onClick={() => { setDraftDate(key); setShowCalendar(false); setStep("time"); }}
@@ -656,19 +774,113 @@ export function TaskComposer({ weekDates, events, tags, onCommit, prefill }: Pro
             </>
           )}
 
-          {/* Back / Skip nav */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, paddingTop: 8, borderTop: "1px solid rgba(123,115,214,0.2)" }}>
-            <button onClick={goBack}
-              style={{ fontSize: 11, color: "#9B91E0", background: "none", border: "none", cursor: "pointer", fontWeight: 500, padding: 0 }}>
-              ← back
-            </button>
-            {SKIPPABLE.includes(step) && (
-              <button onClick={skipStep}
-                style={{ fontSize: 11, color: "#9B91E0", background: "none", border: "none", cursor: "pointer", fontWeight: 500, padding: 0 }}>
-                skip →
+          {/* TASK DAY */}
+          {step === "taskDay" && (
+            <>
+              <p style={{ fontSize: 13, color: "#1A5C3A", fontWeight: 600, marginBottom: 10 }}>Which day for this task?</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 8 }}>
+                {weekDates.map((date) => {
+                  const key = format(date, "yyyy-MM-dd");
+                  const label = isToday(date) ? "Today" : isTomorrow(date) ? "Tomorrow" : format(date, "EEEE");
+                  return (
+                    <OptionRow
+                      key={key}
+                      label={label}
+                      sublabel={format(date, "MMM d")}
+                      selected={draftDate === key}
+                      onClick={() => { setDraftDate(key); setShowCalendar(false); setStep("taskTag"); }}
+                    />
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => setShowCalendar((v) => !v)}
+                style={{ fontSize: 11, color: "#3A8A5F", background: "none", border: "none", cursor: "pointer", fontWeight: 500, padding: "4px 0", width: "100%", textAlign: "center" }}
+              >
+                {showCalendar ? "▲ hide calendar" : "▾ pick another date"}
               </button>
-            )}
-          </div>
+              {showCalendar && (
+                <div style={{ marginTop: 8 }}>
+                  <MiniCalendar
+                    selected={draftDate}
+                    onSelect={(date) => { setDraftDate(date); setShowCalendar(false); setStep("taskTag"); }}
+                  />
+                </div>
+              )}
+            </>
+          )}
+
+          {/* TASK TAG */}
+          {step === "taskTag" && (
+            <>
+              <p style={{ fontSize: 13, color: "#1A5C3A", fontWeight: 600, marginBottom: 8 }}>Tag? <span style={{ fontSize: 11, fontWeight: 400, color: "#3A8A5F" }}>(optional)</span></p>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                {tags.map((t) => {
+                  const { bg, text: fg } = tagColors(t);
+                  const isSelected = draftTag === t.id;
+                  return (
+                    <button key={t.id} onClick={() => { setDraftTag(t.id); setStep("taskConfirm"); }}
+                      style={{
+                        background: bg, color: fg,
+                        border: isSelected ? `2px solid ${fg}` : "2px solid transparent",
+                        borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 600,
+                        cursor: "pointer", outline: "none",
+                        boxShadow: isSelected ? `0 0 0 3px ${bg}99` : "none",
+                        transition: "all 0.1s",
+                      }}>
+                      #{t.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {/* TASK CONFIRM */}
+          {step === "taskConfirm" && (
+            <>
+              <p style={{ fontSize: 13, color: "#1A5C3A", fontWeight: 600, marginBottom: 8 }}>Add this task?</p>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                <span style={{ background: "#D6F5E8", color: "#1A5C3A", borderRadius: 20, padding: "4px 10px", fontSize: 12, fontWeight: 600 }}>
+                  task
+                </span>
+                <span style={chipStyle(false)}>{format(new Date(draftDate + "T00:00:00"), "EEE MMM d")}</span>
+                {draftTag && tags.find((t) => t.id === draftTag) && (() => {
+                  const t = tags.find((t) => t.id === draftTag)!;
+                  return (
+                    <span style={{ background: tagColors(t).bg, color: tagColors(t).text, borderRadius: 20, padding: "4px 10px", fontSize: 12, fontWeight: 600 }}>
+                      #{t.name}
+                    </span>
+                  );
+                })()}
+              </div>
+              <button onClick={commitTask}
+                style={{ width: "100%", background: "#3A8A5F", color: "#fff", border: "none", borderRadius: 8, padding: "9px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Add Task ↵
+              </button>
+            </>
+          )}
+
+          {/* Back / Skip nav */}
+          {(() => {
+            const isTaskFlow = step.startsWith("task");
+            const navColor = isTaskFlow ? "#3A8A5F" : "#9B91E0";
+            const borderColor = isTaskFlow ? "rgba(58,138,95,0.2)" : "rgba(123,115,214,0.2)";
+            return (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, paddingTop: 8, borderTop: `1px solid ${borderColor}` }}>
+                <button onClick={goBack}
+                  style={{ fontSize: 11, color: navColor, background: "none", border: "none", cursor: "pointer", fontWeight: 500, padding: 0 }}>
+                  ← back
+                </button>
+                {SKIPPABLE.includes(step) && (
+                  <button onClick={skipStep}
+                    style={{ fontSize: 11, color: navColor, background: "none", border: "none", cursor: "pointer", fontWeight: 500, padding: 0 }}>
+                    skip →
+                  </button>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

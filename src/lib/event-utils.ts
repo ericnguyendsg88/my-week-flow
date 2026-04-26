@@ -88,3 +88,31 @@ export const nowMinutes = () => {
   const d = new Date();
   return d.getHours() * 60 + d.getMinutes();
 };
+
+const EVENT_SIGNALS = [
+  "meeting", "standup", "sync", "lunch", "dinner", "brunch", "coffee", "drinks",
+  "party", "hangout", "date", "interview", "session", "appointment", "call with",
+  "chat with", "catch up", "workshop", "conference", "event", "class", "lesson",
+  "gym", "run", "yoga", "workout", "therapy", "doctor", "dentist",
+];
+
+const TASK_SIGNALS = [
+  "buy", "finish", "complete", "send", "write", "review", "fix", "check",
+  "submit", "prepare", "read", "research", "update", "create", "make",
+  "clean", "organize", "schedule", "book", "order", "pay", "pick up",
+  "follow up", "respond", "draft", "edit", "upload", "download", "install",
+  "remember to", "don't forget", "need to", "todo",
+];
+
+/** Detect whether user input looks more like a calendar event or a to-do task. */
+export function guessInputType(text: string): "event" | "task" | "ambiguous" {
+  if (!text.trim()) return "ambiguous";
+  const lower = text.toLowerCase();
+  const eventScore = EVENT_SIGNALS.filter((s) => lower.includes(s)).length;
+  const taskScore = TASK_SIGNALS.filter((s) => lower.startsWith(s) || lower.includes(" " + s + " ") || lower.endsWith(" " + s)).length
+    + (lower.split(" ").length <= 3 && /^[a-z]/.test(lower) && TASK_SIGNALS.some((s) => lower.startsWith(s)) ? 1 : 0);
+
+  if (eventScore > taskScore) return "event";
+  if (taskScore > eventScore) return "task";
+  return "ambiguous";
+}

@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { format, eachDayOfInterval, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isSameMonth, addMonths, subMonths } from "date-fns";
-import { X, Trash2, Check, Ban, RotateCcw, Lightbulb, Link2, FileText, Bookmark, CheckSquare, ExternalLink, Pencil, type LucideIcon } from "lucide-react";
-import { CalEvent, CaptureKind, Tag } from "@/types/event";
+import { X, Trash2, Check, Ban, RotateCcw, Lightbulb, Link2, FileText, Bookmark, CheckSquare, ExternalLink, Pencil, Plus, type LucideIcon } from "lucide-react";
+import { CalEvent, CaptureKind, Tag, SpendingRecord, SpendingCategory, SPENDING_CATEGORIES } from "@/types/event";
 import { getTag } from "@/lib/tags";
 import { minutesToLabel, durationLabel, nowMinutes } from "@/lib/event-utils";
 
@@ -121,6 +121,25 @@ interface Props {
   compact?: boolean;
 }
 
+// ── Spending helpers ──────────────────────────────────────────────
+function formatAmount(amount: number, currency: string) {
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(amount);
+  } catch {
+    return `${currency} ${amount.toFixed(2)}`;
+  }
+}
+
+function totalSpendings(spendings: SpendingRecord[]) {
+  const byCurrency: Record<string, number> = {};
+  for (const s of spendings) {
+    byCurrency[s.currency] = (byCurrency[s.currency] ?? 0) + s.amount;
+  }
+  return Object.entries(byCurrency)
+    .map(([cur, amt]) => formatAmount(amt, cur))
+    .join(" + ");
+}
+
 export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, isResizing, compact = false }: Props) {
   const tag = tags ? getTag(tags, event.tagId) : undefined;
   const colors = tagColors(tag?.id ?? event.tagId);
@@ -140,6 +159,35 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, i
   const [editTentative, setEditTentative] = useState(event.tentative === true);
   // which sub-section is expanded inside edit mode
   const [expandSection, setExpandSection] = useState<"date" | "startTime" | "endTime" | null>(null);
+
+  // spending state
+  const [showSpending, setShowSpending] = useState(false);
+  const [spendAmount, setSpendAmount] = useState("");
+  const [spendLabel, setSpendLabel] = useState("");
+  const [spendCurrency, setSpendCurrency] = useState("USD");
+  const [spendCategory, setSpendCategory] = useState<SpendingCategory>("other");
+
+  function addSpending() {
+    const amount = parseFloat(spendAmount.replace(/,/g, ""));
+    if (!amount || isNaN(amount) || !spendLabel.trim()) return;
+    const record: SpendingRecord = {
+      id: crypto.randomUUID(),
+      amount,
+      currency: spendCurrency.toUpperCase().trim() || "USD",
+      label: spendLabel.trim(),
+      category: spendCategory,
+      addedAt: Date.now(),
+    };
+    onUpdate?.({ spendings: [...(event.spendings ?? []), record] });
+    setSpendAmount("");
+    setSpendLabel("");
+    setSpendCategory("other");
+    setShowSpending(false);
+  }
+
+  function deleteSpending(id: string) {
+    onUpdate?.({ spendings: (event.spendings ?? []).filter((s) => s.id !== id) });
+  }
 
   useEffect(() => {
     if (showDetail) {
@@ -583,6 +631,137 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, i
                   })}
                 </div>
               )}
+
+              {/* ── Spending tracker ── */}
+              <div style={{ marginTop: 16, borderTop: "1px solid #EDEBE7", paddingTop: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.06em" }}>Spending</span>
+                    {(event.spendings?.length ?? 0) > 0 && (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#3C3489", background: "#EEEDFE", borderRadius: 20, padding: "1px 8px" }}>
+                        {totalSpendings(event.spendings!)}
+                      </span>
+                    )}
+                  </div>
+                  {onUpdate && (
+                    <button
+                      type="button"
+                      onClick={() => setShowSpending((v) => !v)}
+                      style={{ display: "flex", alignItems: "center", gap: 4, background: showSpending ? "#EBE8FC" : "#F5F3F0", border: "none", borderRadius: 8, padding: "4px 9px", fontSize: 11, fontWeight: 600, color: "#3C3489", cursor: "pointer" }}
+                    >
+                      <Plus size={11} strokeWidth={2.5} /> Add
+                    </button>
+                  )}
+                </div>
+
+                {/* Existing spending records */}
+                {(event.spendings?.length ?? 0) > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: showSpending ? 10 : 0 }}>
+                    {event.spendings!.map((s) => {
+                      const cat = SPENDING_CATEGORIES.find((c) => c.id === s.category);
+                      return (
+                        <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, background: "#F8F6F3", borderRadius: 9, padding: "7px 10px" }}>
+                          <span style={{ fontSize: 14, lineHeight: 1, flexShrink: 0 }}>{cat?.emoji ?? "📎"}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: "#222", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.label}</div>
+                            <div style={{ fontSize: 10, color: "#999", marginTop: 1 }}>{cat?.label ?? s.category}</div>
+                          </div>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "#3C3489", flexShrink: 0 }}>
+                            {formatAmount(s.amount, s.currency)}
+                          </span>
+                          {onUpdate && (
+                            <button
+                              type="button"
+                              onClick={() => deleteSpending(s.id)}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", padding: 2, display: "flex", alignItems: "center" }}
+                              title="Remove"
+                            >
+                              <X size={12} strokeWidth={2.5} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Add spending form */}
+                {showSpending && (
+                  <div style={{ background: "#F3F0FE", borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                    {/* Amount + currency row */}
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input
+                        autoFocus
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={spendAmount}
+                        onChange={(e) => setSpendAmount(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") addSpending(); if (e.key === "Escape") setShowSpending(false); }}
+                        placeholder="0.00"
+                        style={{ flex: 1, background: "#fff", border: "1.5px solid #C5BEF5", borderRadius: 8, padding: "7px 10px", fontSize: 14, fontWeight: 600, color: "#3C3489", outline: "none", minWidth: 0 }}
+                      />
+                      <input
+                        value={spendCurrency}
+                        onChange={(e) => setSpendCurrency(e.target.value.toUpperCase().slice(0, 3))}
+                        placeholder="USD"
+                        maxLength={3}
+                        style={{ width: 52, background: "#fff", border: "1.5px solid #C5BEF5", borderRadius: 8, padding: "7px 8px", fontSize: 12, fontWeight: 700, color: "#3C3489", outline: "none", textAlign: "center" }}
+                      />
+                    </div>
+                    {/* Label */}
+                    <input
+                      value={spendLabel}
+                      onChange={(e) => setSpendLabel(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") addSpending(); if (e.key === "Escape") setShowSpending(false); }}
+                      placeholder="What was it for? (e.g. Coffee)"
+                      style={{ background: "#fff", border: "1.5px solid #C5BEF5", borderRadius: 8, padding: "7px 10px", fontSize: 13, color: "#333", outline: "none" }}
+                    />
+                    {/* Category pills */}
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                      {SPENDING_CATEGORIES.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setSpendCategory(c.id)}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 3,
+                            padding: "3px 9px", borderRadius: 20, fontSize: 11, fontWeight: 600,
+                            cursor: "pointer",
+                            background: spendCategory === c.id ? "#3C3489" : "#fff",
+                            color: spendCategory === c.id ? "#fff" : "#555",
+                            border: spendCategory === c.id ? "1.5px solid #3C3489" : "1.5px solid #DDD",
+                            transition: "all 0.1s",
+                          }}
+                        >
+                          {c.emoji} {c.label}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Save row */}
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        type="button"
+                        onClick={addSpending}
+                        style={{ flex: 1, background: "#3C3489", color: "#fff", border: "none", borderRadius: 9, padding: "8px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowSpending(false)}
+                        style={{ flex: 1, background: "#E8E4DF", color: "#666", border: "none", borderRadius: 9, padding: "8px 0", fontSize: 13, cursor: "pointer" }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {(event.spendings?.length ?? 0) === 0 && !showSpending && (
+                  <p style={{ fontSize: 11, color: "#C8C4BE", fontStyle: "italic" }}>No spending recorded</p>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -838,6 +1017,26 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, i
             </span>
           )}
         </p>
+
+        {/* Spending badge */}
+        {(event.spendings?.length ?? 0) > 0 && (
+          <div style={{
+            position: "relative", zIndex: 1,
+            marginTop: 2,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 3,
+            background: "rgba(0,0,0,0.10)",
+            borderRadius: 20,
+            padding: "1px 6px",
+            alignSelf: "flex-start",
+          }}>
+            <span style={{ fontSize: 9 }}>💸</span>
+            <span style={{ fontSize: 9, fontWeight: 600, color: textColor, opacity: 0.85 }}>
+              {totalSpendings(event.spendings!)}
+            </span>
+          </div>
+        )}
 
         {/* Location / people badges */}
         {(event.where || event.who) && (
