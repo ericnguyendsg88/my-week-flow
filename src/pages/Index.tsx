@@ -426,6 +426,13 @@ const HorizonApp = ({ userId }: { userId: string }) => {
         showToast(`"${ev.title}" duplicated`);
         return;
       }
+
+      // Cmd+Tab — toggle sidebar
+      if (e.key === "Tab") {
+        e.preventDefault();
+        setLeftCollapsed(v => !v);
+        return;
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
