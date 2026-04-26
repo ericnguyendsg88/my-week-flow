@@ -487,7 +487,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
       {/* ── LEFT PANEL ── */}
       <div
         className="flex shrink-0 flex-col overflow-hidden"
-        style={{ width: leftPanelWidth, background: "#F4F1ED", borderRadius: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
+        style={{ width: leftPanelWidth, minWidth: MIN_LEFT, maxWidth: 520, background: "#F4F1ED", borderRadius: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
       >
         {/* Header */}
         <div style={{ padding: "24px 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -534,30 +534,30 @@ const HorizonApp = ({ userId }: { userId: string }) => {
               {isViewingToday ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                   {/* Row 1: pulse dot + Now time + divider + time of day */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
                     <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#B6DFB0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#3A8733" }} />
                     </span>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: "#1D5C17" }}>Now · {nowTime}</span>
-                    <div style={{ width: 1, height: 14, background: "#B6DFB0", opacity: 0.6 }} />
-                    <span style={{ fontSize: 12, fontWeight: 500, color: "#3A8733" }}>{timeOfDay}</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: "#1D5C17", whiteSpace: "nowrap" }}>Now · {nowTime}</span>
+                    <div style={{ width: 1, height: 14, background: "#B6DFB0", opacity: 0.6, flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontWeight: 500, color: "#3A8733", whiteSpace: "nowrap" }}>{timeOfDay}</span>
                   </div>
                   {/* Row 2: date + weather */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 11, fontWeight: 500, color: "#3A8733", opacity: 0.8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: "#3A8733", opacity: 0.8, whiteSpace: "nowrap" }}>
                       {format(today, "EEE, MMM d")}
                     </span>
                     {weather && (
                       <>
-                        <div style={{ width: 1, height: 10, background: "#B6DFB0", opacity: 0.6 }} />
-                        <span style={{ fontSize: 11 }}>{weather.emoji}</span>
-                        <span style={{ fontSize: 11, fontWeight: 500, color: "#3A8733", opacity: 0.85 }}>
+                        <div style={{ width: 1, height: 10, background: "#B6DFB0", opacity: 0.6, flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, flexShrink: 0 }}>{weather.emoji}</span>
+                        <span style={{ fontSize: 11, fontWeight: 500, color: "#3A8733", opacity: 0.85, whiteSpace: "nowrap" }}>
                           {weather.temp}°C
                         </span>
                         {weather.city && (
                           <>
-                            <div style={{ width: 1, height: 10, background: "#B6DFB0", opacity: 0.6 }} />
-                            <span style={{ fontSize: 10, fontWeight: 500, color: "#3A8733", opacity: 0.65, maxWidth: 80, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            <div style={{ width: 1, height: 10, background: "#B6DFB0", opacity: 0.6, flexShrink: 0 }} />
+                            <span style={{ fontSize: 10, fontWeight: 500, color: "#3A8733", opacity: 0.65, maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {weather.city}
                             </span>
                           </>
@@ -693,30 +693,30 @@ const HorizonApp = ({ userId }: { userId: string }) => {
         style={{ background: "#F4F1ED", borderRadius: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", minWidth: minRightWidth }}
       >
         {/* Header */}
-        <div style={{ padding: "20px 24px 16px" }} className="flex shrink-0 items-start justify-between">
-          <div className="flex items-center gap-4">
+        <div style={{ padding: "20px 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }} className="shrink-0">
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, flexShrink: 1, overflow: "hidden" }}>
             {viewMode === "focus" ? (
-              <div>
-                <h2 style={{ fontSize: 28, fontWeight: 700, lineHeight: "1.1" }}>
+              <div style={{ minWidth: 0 }}>
+                <h2 style={{ fontSize: 28, fontWeight: 700, lineHeight: "1.1", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {isToday(focusDate) ? "Today" : format(focusDate, "EEEE")}
                 </h2>
-                <p style={{ fontSize: 13, color: "hsl(var(--muted-foreground))", marginTop: 3 }}>
+                <p style={{ fontSize: 13, color: "hsl(var(--muted-foreground))", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {format(focusDate, "MMMM d, yyyy")} · {events.filter(e => e.date === focusDateKey).length} event{events.filter(e => e.date === focusDateKey).length !== 1 ? "s" : ""}
                 </p>
               </div>
             ) : viewMode === "month" ? (
               <div /> // header lives inside MonthView
             ) : (
-              <div>
-                <h2 style={{ fontSize: 28, fontWeight: 700, lineHeight: "1.1" }}>{format(weekDates[0], "MMMM yyyy")}</h2>
-                <p style={{ fontSize: 13, color: "hsl(var(--muted-foreground))", marginTop: 3 }}>
+              <div style={{ minWidth: 0 }}>
+                <h2 style={{ fontSize: 28, fontWeight: 700, lineHeight: "1.1", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{format(weekDates[0], "MMMM yyyy")}</h2>
+                <p style={{ fontSize: 13, color: "hsl(var(--muted-foreground))", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {format(weekDates[0], "EEE d")} → {format(weekDates[weekDates.length - 1], "EEE d")}
                 </p>
               </div>
             )}
 
             {(viewMode === "week") && (
-              <div className="flex items-center gap-1">
+              <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
                 <button onClick={handleWeekBack}
                   style={{ background: "#fff", border: "1px solid #EAEAEA", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#3C3489" }}>←</button>
                 <button onClick={handleWeekToday}
@@ -727,7 +727,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             {/* Supabase sync status */}
             <div title={sync.error ?? undefined} style={{
               display: "flex", alignItems: "center", gap: 5,

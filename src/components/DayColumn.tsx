@@ -1,13 +1,47 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { format, isToday, isTomorrow } from "date-fns";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion"; // AnimatePresence used in event panels
 import { X, CheckSquare } from "lucide-react";
 import { CalEvent, CaptureItem, Tag, DURATIONS } from "@/types/event";
 import { EventBubble } from "./EventBubble";
 import { NowMarker } from "./NowMarker";
 import { nowMinutes, minutesToLabel, durationLabel } from "@/lib/event-utils";
 import { patchCapture } from "@/lib/capture-store";
+
+// ── Day type ──────────────────────────────────────────────────────────
+export type DayType = "work" | "holiday" | "free" | "travel" | "sick" | "focus";
+
+export const DAY_TYPES: { id: DayType; label: string; emoji: string; bg: string; text: string; headerBg: string; border: string }[] = [
+  { id: "work",    label: "Work day",   emoji: "💼", bg: "#EEEDFE", text: "#3C3489", headerBg: "#EEEDFE", border: "#C5BEF5" },
+  { id: "focus",   label: "Focus day",  emoji: "🎯", bg: "#E1F5EE", text: "#085041", headerBg: "#E1F5EE", border: "#9FE1CB" },
+  { id: "free",    label: "Free day",   emoji: "🌿", bg: "#EAF3DE", text: "#27500A", headerBg: "#EAF3DE", border: "#B8DDA0" },
+  { id: "holiday", label: "Holiday",    emoji: "🎉", bg: "#FAEEDA", text: "#633806", headerBg: "#FAEEDA", border: "#FAC775" },
+  { id: "travel",  label: "Travel",     emoji: "✈️", bg: "#E6F1FB", text: "#0C447C", headerBg: "#E6F1FB", border: "#B5D4F4" },
+  { id: "sick",    label: "Sick day",   emoji: "🤒", bg: "#FEF0EE", text: "#C0392B", headerBg: "#FEF0EE", border: "#FACEC9" },
+];
+
+const DAY_TYPE_STORAGE = "horizon_day_types";
+
+function loadDayTypes(): Record<string, DayType> {
+  try { return JSON.parse(localStorage.getItem(DAY_TYPE_STORAGE) ?? "{}"); } catch { return {}; }
+}
+
+function saveDayType(dateKey: string, type: DayType | null) {
+  const all = loadDayTypes();
+  if (type === null) delete all[dateKey];
+  else all[dateKey] = type;
+  localStorage.setItem(DAY_TYPE_STORAGE, JSON.stringify(all));
+}
+
+function useDayType(dateKey: string) {
+  const [type, setType] = useState<DayType | null>(() => loadDayTypes()[dateKey] ?? null);
+  function update(t: DayType | null) {
+    saveDayType(dateKey, t);
+    setType(t);
+  }
+  return [type, update] as const;
+}
 
 const PANEL_MARGIN = 16;
 const PANEL_WIDTH = 360;
@@ -179,13 +213,41 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
   const isT = isToday(date);
   const isTom = isTomorrow(date);
   const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+  const dateKey = format(date, "yyyy-MM-dd");
+
+  const [dayType, setDayType] = useDayType(dateKey);
+  const [showTypePicker, setShowTypePicker] = useState(false);
+  const [pickerPos, setPickerPos] = useState({ top: 0, left: 0 });
+  const typePickerRef = useRef<HTMLDivElement>(null);
+  const typeBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Close picker on outside click
+  useEffect(() => {
+    if (!showTypePicker) return;
+    function onDown(e: MouseEvent) {
+      if (
+        typePickerRef.current && !typePickerRef.current.contains(e.target as Node) &&
+        typeBtnRef.current && !typeBtnRef.current.contains(e.target as Node)
+      ) {
+        setShowTypePicker(false);
+      }
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [showTypePicker]);
+
+  const dayTypeDef = dayType ? DAY_TYPES.find(d => d.id === dayType) : null;
 
   let subtitle = format(date, "EEE d").toLowerCase();
   if (isT) subtitle = "today";
-  if (isTom) subtitle = "tomorrow";
-  if (isWeekend) subtitle = "open day";
+  else if (isTom) subtitle = "tomorrow";
+  else if (dayTypeDef) subtitle = dayTypeDef.label.toLowerCase();
+  else if (isWeekend) subtitle = "open day";
 
   const now = nowMinutes();
+
+  // Day type strip color
+  const stripColor = dayTypeDef ? dayTypeDef.border : null;
 
   // Day column chrome — design system colors
   let bg = "#FFFFFF";
@@ -202,10 +264,11 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
     subColor = "#3B6D11";
   } else if (isSelected) {
     bg = "#FFFFFF";
-    headerBg = "#EEEDFE";
-    border = "1.5px solid #534AB7";
-    titleColor = "#3C3489";
-    subColor = "#534AB7";
+    headerBg = dayTypeDef ? dayTypeDef.headerBg : "transparent";
+    const selColor = dayTypeDef ? dayTypeDef.border : "#C8C4BE";
+    border = `1.5px solid ${selColor}`;
+    titleColor = dayTypeDef ? dayTypeDef.text : "#444441";
+    subColor = dayTypeDef ? dayTypeDef.text : "#888580";
   } else if (isTom) {
     bg = "#FFFFFF";
     headerBg = "#FAFAFA";
@@ -665,7 +728,10 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
     <div style={{
       flex: 1,
       background: bg,
-      border,
+      borderTop: stripColor ? `3px solid ${stripColor}` : border,
+      borderRight: border,
+      borderBottom: border,
+      borderLeft: border,
       borderRadius: 20,
       display: "flex",
       flexDirection: "column",
@@ -675,26 +741,113 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
       opacity: colOpacity,
       boxShadow: isT ? "0 0 0 0" : "none",
     }}>
-      {/* Header — first click selects, second click enters focus */}
+      {/* Header */}
       <div
-        onClick={() => onDayClick?.(date)}
-        style={{ padding: "14px 14px 8px", height: 76, boxSizing: "border-box", flexShrink: 0, cursor: onDayClick ? "pointer" : "default", borderRadius: "19px 19px 0 0", background: headerBg }}
+        style={{ padding: "14px 14px 8px", height: 76, boxSizing: "border-box", flexShrink: 0, borderRadius: "19px 19px 0 0", background: headerBg, display: "flex", flexDirection: "column", justifyContent: "space-between" }}
       >
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-          <h3 style={{ fontSize: focusMode ? 18 : 14, fontWeight: 500, color: titleColor }}>{format(date, "EEEE")}</h3>
-          {isSelected && !focusMode && (
-            <span style={{ fontSize: 9, fontWeight: 500, color: "#534AB7", letterSpacing: "0.07em", textTransform: "uppercase" }}>
-              focus →
-            </span>
-          )}
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", cursor: onDayClick ? "pointer" : "default", gap: 4, overflow: "hidden" }} onClick={() => onDayClick?.(date)}>
+          <h3 style={{ fontSize: focusMode ? 18 : 14, fontWeight: 500, color: titleColor, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{format(date, "EEEE")}</h3>
           {isT && !focusMode && (
-            <span style={{ fontSize: 9, fontWeight: 500, color: "#3B6D11", letterSpacing: "0.07em", textTransform: "uppercase" }}>
-              today
-            </span>
+            <span style={{ fontSize: 9, fontWeight: 500, color: "#3B6D11", letterSpacing: "0.07em", textTransform: "uppercase", flexShrink: 0 }}>today</span>
           )}
         </div>
-        <p style={{ fontSize: 11, color: subColor, fontWeight: 500, marginTop: 2 }}>{subtitle}</p>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4, overflow: "hidden" }}>
+          <p style={{ fontSize: 11, color: subColor, fontWeight: 500, cursor: onDayClick ? "pointer" : "default", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }} onClick={() => onDayClick?.(date)}>{subtitle}</p>
+          <button
+            ref={typeBtnRef}
+            type="button"
+            onClick={e => {
+              e.stopPropagation();
+              if (!showTypePicker && typeBtnRef.current) {
+                const r = typeBtnRef.current.getBoundingClientRect();
+                setPickerPos({ top: r.bottom + 6, left: Math.max(8, r.left - 8) });
+              }
+              setShowTypePicker(v => !v);
+            }}
+            style={{
+              display: "flex", alignItems: "center", gap: 4,
+              background: dayTypeDef ? "rgba(0,0,0,0.07)" : "rgba(0,0,0,0.05)",
+              border: "1px solid rgba(0,0,0,0.09)",
+              borderRadius: 20,
+              padding: "2px 7px 2px 5px",
+              cursor: "pointer",
+              fontSize: 11, fontWeight: 600,
+              color: subColor,
+            }}
+          >
+            <span style={{ fontSize: 12, lineHeight: 1 }}>{dayTypeDef ? dayTypeDef.emoji : "+"}</span>
+            <span>{dayTypeDef ? dayTypeDef.label : "type"}</span>
+          </button>
+        </div>
       </div>
+
+      {/* Day type picker popover */}
+      {showTypePicker && createPortal(
+        <div
+          ref={typePickerRef}
+          style={{
+            position: "fixed",
+            zIndex: 901,
+            background: "#FFFFFF",
+            borderRadius: 14,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.14), 0 1px 4px rgba(0,0,0,0.08)",
+            padding: "8px",
+            width: 192,
+            top: pickerPos.top,
+            left: pickerPos.left,
+          }}
+        >
+          <p style={{ fontSize: 10, fontWeight: 700, color: "#AAA", letterSpacing: "0.07em", textTransform: "uppercase", margin: "2px 6px 6px" }}>Day type</p>
+          {DAY_TYPES.map(dt => (
+            <button
+              key={dt.id}
+              type="button"
+              onClick={e => { e.stopPropagation(); setDayType(dt.id); setShowTypePicker(false); }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                width: "100%",
+                padding: "7px 10px",
+                background: dayType === dt.id ? dt.bg : "transparent",
+                border: "none",
+                borderRadius: 9,
+                cursor: "pointer",
+                textAlign: "left",
+                fontSize: 13,
+                fontWeight: dayType === dt.id ? 700 : 500,
+                color: dayType === dt.id ? dt.text : "#444",
+              }}
+              onMouseEnter={e => { if (dayType !== dt.id) e.currentTarget.style.background = "#F5F3F0"; }}
+              onMouseLeave={e => { if (dayType !== dt.id) e.currentTarget.style.background = "transparent"; }}
+            >
+              <span style={{ fontSize: 16 }}>{dt.emoji}</span>
+              <span>{dt.label}</span>
+            </button>
+          ))}
+          {dayType && (
+            <>
+              <div style={{ height: 1, background: "#F0EDE8", margin: "6px 0" }} />
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); setDayType(null); setShowTypePicker(false); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  width: "100%", padding: "7px 10px",
+                  background: "transparent", border: "none", borderRadius: 9,
+                  cursor: "pointer", fontSize: 12, color: "#999", fontWeight: 500,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#F5F3F0"; e.currentTarget.style.color = "#666"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#999"; }}
+              >
+                <span style={{ fontSize: 14 }}>✕</span>
+                <span>Clear day type</span>
+              </button>
+            </>
+          )}
+        </div>,
+        document.body
+      )}
 
       {/* Timeline */}
       <div
