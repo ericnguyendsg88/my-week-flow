@@ -14,10 +14,11 @@ import {
   startOfWeek,
   subWeeks,
 } from "date-fns";
-import { Undo2, Redo2, Calendar, CalendarDays, EyeOff, Sparkles, CalendarRange } from "lucide-react";
+import { Undo2, Redo2, Calendar, CalendarDays, EyeOff, Sparkles, CalendarRange, Settings } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CalEvent, Tag } from "@/types/event";
 import { DEFAULT_TAGS } from "@/lib/tags";
+import { SettingsModal, loadCustomTags, saveCustomTags, loadSidebarShortcut, saveSidebarShortcut } from "@/components/SettingsModal";
 import { TaskComposer } from "@/components/TaskComposer";
 import { DayColumn } from "@/components/DayColumn";
 import { Backpack } from "@/components/Backpack";
@@ -177,7 +178,18 @@ const HorizonApp = ({ userId }: { userId: string }) => {
     document.addEventListener("mouseup", onMouseUp);
   }, [leftPanelWidth, minRightWidth]);
 
-  const [tags] = useState<Tag[]>(DEFAULT_TAGS);
+  const [tags, setTags] = useState<Tag[]>(() => loadCustomTags(DEFAULT_TAGS));
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sidebarShortcut, setSidebarShortcut] = useState(() => loadSidebarShortcut());
+
+  function handleTagsChange(next: Tag[]) {
+    setTags(next);
+    saveCustomTags(next);
+  }
+  function handleShortcutChange(key: string) {
+    setSidebarShortcut(key);
+    saveSidebarShortcut(key);
+  }
 
   // ── Events with undo/redo history ──
   const [histState, dispatch] = useReducer(historyReducer, undefined, () => {
@@ -427,8 +439,8 @@ const HorizonApp = ({ userId }: { userId: string }) => {
         return;
       }
 
-      // Cmd+Tab — toggle sidebar
-      if (e.key === "Tab") {
+      // Cmd+\ (or configured key) — toggle sidebar
+      if (e.key === sidebarShortcut) {
         e.preventDefault();
         setLeftCollapsed(v => !v);
         return;
@@ -436,7 +448,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [events, handlePasteEvent]);
+  }, [events, handlePasteEvent, sidebarShortcut]);
 
   const focusDateKey = format(focusDate, "yyyy-MM-dd");
   const displayDates = viewMode === "focus"
@@ -1092,6 +1104,21 @@ const HorizonApp = ({ userId }: { userId: string }) => {
               </button>
             </div>
 
+            {/* Settings */}
+            <button
+              onClick={() => setSettingsOpen(true)}
+              title="Settings"
+              style={{
+                width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                background: "#fff", border: "1px solid #EAEAEA", color: "#3C3489", cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = "#EEEDFE"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "#fff"; }}
+            >
+              <Settings size={14} strokeWidth={2} />
+            </button>
+
             {/* View toggle */}
             <div className="flex items-center" style={{ background: "hsl(var(--muted))", borderRadius: 20, padding: 3, gap: 2 }}>
               {(["week", "month", "focus"] as const).map((v) => (
@@ -1286,6 +1313,16 @@ const HorizonApp = ({ userId }: { userId: string }) => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Settings modal */}
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        tags={tags}
+        onTagsChange={handleTagsChange}
+        sidebarShortcut={sidebarShortcut}
+        onShortcutChange={handleShortcutChange}
+      />
 
       {/* ── MOBILE BOTTOM TAB BAR ── */}
       {isMobile && (
