@@ -972,7 +972,7 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, i
         )}
 
         {/* Title */}
-        <div style={{ position: "relative", zIndex: 1, flex: "0 0 auto", minHeight: 0 }}>
+        <div style={{ position: "relative", zIndex: 1, flex: "0 0 auto", minHeight: 0, marginTop: isInProgress && !isCompleted && !isSkipped ? 14 : 0 }}>
           <span style={{
             fontSize: 12,
             fontWeight: 500,
