@@ -1144,22 +1144,32 @@ const HorizonApp = ({ userId }: { userId: string }) => {
 
         {/* Grid */}
         <div className="flex min-h-0 flex-1 overflow-hidden" style={{ paddingLeft: 24, paddingRight: 24, paddingBottom: 16 }}>
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="wait" custom={viewMode === "month" ? 1 : -1}>
             {viewMode === "month" ? (
               <motion.div
                 key="month"
-                initial={{ opacity: 0, height: "100%" }}
-                animate={{ 
-                  opacity: 1, 
-                  height: "100%",
-                  transition: { duration: 0.35, ease: [0.4, 0, 0.2, 1] }
+                custom={1}
+                variants={{
+                  enter: (dir: number) => ({
+                    opacity: 0,
+                    scaleY: dir > 0 ? 0.82 : 1.04,
+                    y: dir > 0 ? 24 : -12,
+                    transformOrigin: "top center",
+                  }),
+                  center: {
+                    opacity: 1, scaleY: 1, y: 0,
+                    transition: { type: "spring", stiffness: 280, damping: 28, mass: 0.9 },
+                  },
+                  exit: {
+                    opacity: 0, scaleY: 0.88, y: -16,
+                    transformOrigin: "top center",
+                    transition: { duration: 0.22, ease: [0.4, 0, 1, 1] },
+                  },
                 }}
-                exit={{ 
-                  opacity: 0,
-                  height: "100%",
-                  transition: { duration: 0.25, ease: [0.4, 0, 0.6, 1] }
-                }}
-                style={{ width: "100%", height: "100%" }}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                style={{ width: "100%", height: "100%", transformOrigin: "top center" }}
               >
                 <MonthView
                   events={events}
@@ -1170,10 +1180,32 @@ const HorizonApp = ({ userId }: { userId: string }) => {
             ) : (
               <motion.div
                 key="week"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                style={{ width: "100%", height: "100%", display: "flex" }}
+                custom={-1}
+                variants={{
+                  enter: (dir: number) => ({
+                    opacity: 0,
+                    scaleY: dir < 0 ? 0.82 : 1.04,
+                    scaleX: dir < 0 ? 0.94 : 1,
+                    y: dir < 0 ? 18 : -12,
+                    transformOrigin: "top center",
+                  }),
+                  center: {
+                    opacity: 1, scaleY: 1, scaleX: 1, y: 0,
+                    transition: { type: "spring", stiffness: 300, damping: 30, mass: 0.85 },
+                  },
+                  exit: {
+                    opacity: 0,
+                    scaleY: 0,
+                    scaleX: 0.96,
+                    y: -8,
+                    transformOrigin: "top center",
+                    transition: { duration: 0.28, ease: [0.4, 0, 1, 1] },
+                  },
+                }}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                style={{ width: "100%", height: "100%", display: "flex", transformOrigin: "top center" }}
               >
                 <WeekGrid
                   weekDates={displayDates}
