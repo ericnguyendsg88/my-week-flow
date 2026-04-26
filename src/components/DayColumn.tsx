@@ -58,6 +58,7 @@ interface Props {
   onCreate?: (event: CalEvent) => void;
   onMoveToDay?: (eventId: string, newDate: string) => void;
   onCopyEvent?: (event: CalEvent) => void;
+  onSelectEvent?: (event: CalEvent | null) => void;
   onDayClick?: (date: Date) => void;
   isSelected?: boolean;
   focusMode?: boolean;
@@ -209,7 +210,7 @@ function TaskPill({ task, timelineRef }: { task: CaptureItem; timelineRef: React
   );
 }
 
-export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete, onResize, onUpdate, onCreate, onMoveToDay, onCopyEvent, onDayClick, isSelected, focusMode, compact }: Props) {
+export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete, onResize, onUpdate, onCreate, onMoveToDay, onCopyEvent, onSelectEvent, onDayClick, isSelected, focusMode, compact }: Props) {
   const isT = isToday(date);
   const isTom = isTomorrow(date);
   const isWeekend = date.getDay() === 0 || date.getDay() === 6;
@@ -767,7 +768,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
             style={{
               display: "flex", alignItems: "center", gap: 4,
               background: dayTypeDef ? "rgba(0,0,0,0.07)" : "rgba(0,0,0,0.05)",
-              border: "1px solid rgba(0,0,0,0.09)",
+              border: "none",
               borderRadius: 20,
               padding: "2px 7px 2px 5px",
               cursor: "pointer",
@@ -1033,6 +1034,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
                 onDelete={onDelete ? () => onDelete(ev.id) : undefined}
                 onUpdate={onUpdate ? (patch) => onUpdate(ev.id, patch) : undefined}
                 onCopy={onCopyEvent}
+                onSelect={onSelectEvent}
                 isResizing={isResizing || isMoving}
               />
 

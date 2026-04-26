@@ -354,6 +354,12 @@ const HorizonApp = ({ userId }: { userId: string }) => {
   const prevDay = useCallback(() => setSelectedDate((d) => addDays(d, -1)), []);
   const nextDay = useCallback(() => setSelectedDate((d) => addDays(d, 1)), []);
 
+  // ── Active event (for keyboard shortcuts) ──
+  const activeEventRef = useRef<CalEvent | null>(null);
+  const handleSelectEvent = useCallback((event: CalEvent | null) => {
+    activeEventRef.current = event;
+  }, []);
+
   // ── Copy/paste ──
   const copiedEventRef = useRef<CalEvent | null>(null);
   const handleCopyEvent = useCallback((event: CalEvent) => {
@@ -369,19 +375,59 @@ const HorizonApp = ({ userId }: { userId: string }) => {
     showToast(`Pasted "${src.title}" to ${format(selectedDate, "EEE d")}`);
   }, [events, selectedDayKey, selectedDate]);
 
-  // Cmd+V paste
+  // Keyboard shortcuts: Delete, Cmd+C, Cmd+V, Cmd+D
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (!(e.metaKey || e.ctrlKey) || e.key !== "v") return;
-      if (!copiedEventRef.current) return;
       const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
-      e.preventDefault();
-      handlePasteEvent();
+      const inInput = tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement).isContentEditable;
+      const mod = e.metaKey || e.ctrlKey;
+
+      // Delete / Backspace — delete focused event
+      if ((e.key === "Delete" || e.key === "Backspace") && !inInput) {
+        const ev = activeEventRef.current;
+        if (!ev) return;
+        e.preventDefault();
+        activeEventRef.current = null;
+        dispatch({ type: "PUSH", events: events.filter((e) => e.id !== ev.id) });
+        sbDeleteEvent(ev.id);
+        showToast(`"${ev.title}" deleted — Cmd+Z to undo`);
+        return;
+      }
+
+      if (!mod) return;
+
+      // Cmd+C — copy focused event
+      if (e.key === "c" && !inInput) {
+        const ev = activeEventRef.current;
+        if (!ev) return;
+        e.preventDefault();
+        copiedEventRef.current = ev;
+        showToast(`"${ev.title}" copied — Cmd+V to paste`);
+        return;
+      }
+
+      // Cmd+V — paste copied event
+      if (e.key === "v" && !inInput) {
+        if (!copiedEventRef.current) return;
+        e.preventDefault();
+        handlePasteEvent();
+        return;
+      }
+
+      // Cmd+D — duplicate focused event to same day
+      if (e.key === "d" && !inInput) {
+        const ev = activeEventRef.current;
+        if (!ev) return;
+        e.preventDefault();
+        const dup: CalEvent = { ...ev, id: crypto.randomUUID(), start: ev.start + ev.duration, source: "local", googleId: undefined };
+        dispatch({ type: "PUSH", events: [...events, dup] });
+        showToast(`"${ev.title}" duplicated`);
+        return;
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [handlePasteEvent]);
+  }, [events, handlePasteEvent]);
 
   const focusDateKey = format(focusDate, "yyyy-MM-dd");
   const displayDates = viewMode === "focus"
@@ -1085,6 +1131,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                   onCreate={handleCommit}
                   onMoveToDay={handleMoveToDay}
                   onCopyEvent={handleCopyEvent}
+                  onSelectEvent={handleSelectEvent}
                   compact={compactMode}
                   focusMode={viewMode === "focus"}
                   selectedDayKey={selectedDayKey}
@@ -1266,7 +1313,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
 };
 
 /* ── Week Grid ── */
-function WeekGrid({ weekDates, events, tags, allCaptures, onMark, onDelete, onResize, onUpdate, onCreate, onMoveToDay, onCopyEvent, compact, focusMode, selectedDayKey, onDayClick }: {
+function WeekGrid({ weekDates, events, tags, allCaptures, onMark, onDelete, onResize, onUpdate, onCreate, onMoveToDay, onCopyEvent, onSelectEvent, compact, focusMode, selectedDayKey, onDayClick }: {
   weekDates: Date[];
   events: CalEvent[];
   tags: Tag[];
@@ -1278,6 +1325,7 @@ function WeekGrid({ weekDates, events, tags, allCaptures, onMark, onDelete, onRe
   onCreate: (event: CalEvent) => void;
   onMoveToDay: (eventId: string, newDate: string) => void;
   onCopyEvent: (event: CalEvent) => void;
+  onSelectEvent?: (event: CalEvent | null) => void;
   compact?: boolean;
   focusMode?: boolean;
   selectedDayKey?: string;
@@ -1306,6 +1354,7 @@ function WeekGrid({ weekDates, events, tags, allCaptures, onMark, onDelete, onRe
               onCreate={onCreate}
               onMoveToDay={onMoveToDay}
               onCopyEvent={onCopyEvent}
+              onSelectEvent={onSelectEvent}
               compact={compact}
               focusMode={focusMode}
               isSelected={dateKey === selectedDayKey}

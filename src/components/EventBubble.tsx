@@ -117,6 +117,7 @@ interface Props {
   onDelete?: () => void;
   onUpdate?: (patch: Partial<CalEvent>) => void;
   onCopy?: (event: CalEvent) => void;
+  onSelect?: (event: CalEvent | null) => void;
   isResizing?: boolean;
   compact?: boolean;
 }
@@ -140,7 +141,7 @@ function totalSpendings(spendings: SpendingRecord[]) {
     .join(" + ");
 }
 
-export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, isResizing, compact = false }: Props) {
+export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, onSelect, isResizing, compact = false }: Props) {
   const tag = tags ? getTag(tags, event.tagId) : undefined;
   const colors = tagColors(tag?.id ?? event.tagId);
   const [showDetail, setShowDetail] = useState(false);
@@ -273,7 +274,11 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, i
       window.innerHeight - panelH - PANEL_MARGIN
     );
     setPanelPos({ x, y });
-    setShowDetail((v) => !v);
+    setShowDetail((v) => {
+      const next = !v;
+      onSelect?.(next ? event : null);
+      return next;
+    });
   }
 
   function saveAll() {
@@ -330,7 +335,7 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, i
 
   const detailPanel = showDetail && createPortal(
     <>
-      <div style={{ position: "fixed", inset: 0, zIndex: 998 }} onClick={() => setShowDetail(false)} />
+      <div style={{ position: "fixed", inset: 0, zIndex: 998 }} onClick={() => { setShowDetail(false); onSelect?.(null); }} />
 
       <motion.div
         id="event-detail-panel"
