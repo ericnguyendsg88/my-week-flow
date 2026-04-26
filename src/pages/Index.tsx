@@ -26,7 +26,7 @@ import { nowMinutes, minutesToLabel } from "@/lib/event-utils";
 import { useCaptures, useUnplacedCount, setCaptureSyncUser, syncCapturesFromRemote } from "@/lib/capture-store";
 import { pullEvents, pushEvents, deleteEvent as sbDeleteEvent, useSyncStatus } from "@/lib/sync";
 import { AuthGate } from "@/components/AuthGate";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseConfigured } from "@/lib/supabase";
 
 // ── Undo/Redo history reducer ──────────────────────────────────────
 type HistoryState = {
@@ -81,6 +81,9 @@ function useAuth() {
 
 const Index = () => {
   const { userId, checking } = useAuth();
+
+  // No Supabase config (e.g. Lovable preview) — skip auth, run locally
+  if (!supabaseConfigured) return <HorizonApp userId="local" />;
 
   if (checking) return (
     <div style={{ minHeight: "100vh", background: "#F4F1ED", display: "flex", alignItems: "center", justifyContent: "center" }}>

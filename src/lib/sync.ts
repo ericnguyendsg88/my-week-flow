@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "./supabase";
+import { supabase, supabaseConfigured } from "./supabase";
 import { CalEvent, CaptureItem } from "@/types/event";
 
 // ── Sync status bus ──────────────────────────────────────────────────
@@ -96,7 +96,7 @@ function rowToEvent(r: DbEvent): CalEvent {
 }
 
 export async function pushEvents(events: CalEvent[], userId: string) {
-  if (events.length === 0) return;
+  if (!supabaseConfigured || events.length === 0) return;
   setStatus("syncing");
   const rows = events.map((e) => eventToRow(e, userId));
   const { error } = await supabase.from("events").upsert(rows, { onConflict: "id" });
@@ -105,11 +105,13 @@ export async function pushEvents(events: CalEvent[], userId: string) {
 }
 
 export async function deleteEvent(id: string) {
+  if (!supabaseConfigured) return;
   const { error } = await supabase.from("events").delete().eq("id", id);
   if (error) console.warn("[sync] deleteEvent:", error.message);
 }
 
 export async function pullEvents(userId: string): Promise<CalEvent[] | null> {
+  if (!supabaseConfigured) return null;
   setStatus("syncing");
   const { data, error } = await supabase.from("events").select("*").eq("user_id", userId);
   if (error) { setStatus("error", error.message); console.warn("[sync] pullEvents:", error.message); return null; }
@@ -165,18 +167,20 @@ function rowToCapture(r: DbCapture): CaptureItem {
 }
 
 export async function pushCaptures(captures: CaptureItem[], userId: string) {
-  if (captures.length === 0) return;
+  if (!supabaseConfigured || captures.length === 0) return;
   const rows = captures.map((c) => captureToRow(c, userId));
   const { error } = await supabase.from("captures").upsert(rows, { onConflict: "id" });
   if (error) console.warn("[sync] pushCaptures:", error.message);
 }
 
 export async function deleteCapture(id: string) {
+  if (!supabaseConfigured) return;
   const { error } = await supabase.from("captures").delete().eq("id", id);
   if (error) console.warn("[sync] deleteCapture:", error.message);
 }
 
 export async function pullCaptures(userId: string): Promise<CaptureItem[] | null> {
+  if (!supabaseConfigured) return null;
   const { data, error } = await supabase.from("captures").select("*").eq("user_id", userId);
   if (error) { console.warn("[sync] pullCaptures:", error.message); return null; }
   return (data as DbCapture[]).map(rowToCapture);
