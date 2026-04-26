@@ -190,6 +190,10 @@ const HorizonApp = ({ userId }: { userId: string }) => {
   const canUndo = histState.past.length > 0;
   const canRedo = histState.future.length > 0;
 
+  // Stable dispatch ref so subscription callbacks always hit the latest reducer
+  const dispatchRef = useRef(dispatch);
+  useEffect(() => { dispatchRef.current = dispatch; }, [dispatch]);
+
   useEffect(() => {
     localStorage.setItem("horizon_events", JSON.stringify(events));
   }, [events]);
