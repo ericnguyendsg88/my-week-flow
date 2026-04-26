@@ -212,10 +212,19 @@ const HorizonApp = ({ userId }: { userId: string }) => {
         const local: CalEvent[] = (() => {
           try { return JSON.parse(localStorage.getItem("horizon_events") ?? "[]"); } catch { return []; }
         })();
-        const remoteIds = new Set(remote.map((e) => e.id));
-        // Prefer remote for shared IDs; keep local-only events too
-        const merged = [...remote, ...local.filter((e) => !remoteIds.has(e.id))];
-        dispatch({ type: "PUSH", events: merged });
+
+        // Prefer remote rows for matching IDs so status/field edits from other clients
+        // are reflected locally, while preserving local-only items that are not remote yet.
+        const remoteById = new Map(remote.map((e) => [e.id, e] as const));
+        const merged = local.map((e) => remoteById.get(e.id) ?? e);
+        const localIds = new Set(local.map((e) => e.id));
+        const remoteOnly = remote.filter((e) => !localIds.has(e.id));
+        const next = [...merged, ...remoteOnly];
+
+        const changed = JSON.stringify(next) !== JSON.stringify(local);
+        if (changed) {
+          dispatch({ type: "PUSH", events: next });
+        }
       });
     }
 
