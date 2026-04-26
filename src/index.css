@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=DM+Sans:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -178,11 +178,19 @@
   html, body, #root { height: 100%; overflow: hidden; }
 
   body {
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'DM Sans', system-ui, sans-serif;
     background-color: var(--bg-page);
     color: hsl(var(--foreground));
     -webkit-font-smoothing: antialiased;
-    font-feature-settings: 'cv11', 'ss01';
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'kern', 'liga', 'calt';
+    letter-spacing: -0.01em;
+  }
+
+  /* Serif font for headings, day names, event titles — the "paper" layer */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Lora', Georgia, serif;
+    font-feature-settings: 'kern', 'liga';
   }
 }
 
@@ -226,6 +234,10 @@
 
   .shadow-panel  { box-shadow: var(--shadow-panel); }
   .shadow-bubble { box-shadow: var(--shadow-bubble); }
+
+  /* Paper typography helpers */
+  .font-serif   { font-family: 'Lora', Georgia, serif; }
+  .font-sans    { font-family: 'DM Sans', system-ui, sans-serif; }
 
   .scrollbar-hidden::-webkit-scrollbar { display: none; }
   .scrollbar-hidden { scrollbar-width: none; }

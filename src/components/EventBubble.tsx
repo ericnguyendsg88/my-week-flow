@@ -372,10 +372,10 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
                 value={editTitle}
                 onChange={e => setEditTitle(e.target.value)}
                 onKeyDown={e => { if (e.key === "Escape") cancelEdit(); }}
-                style={{ width: "100%", fontSize: 17, fontWeight: 700, color: "#111", background: "#F3F0FE", border: "2px solid #7B73D6", borderRadius: 10, padding: "6px 10px", outline: "none", boxSizing: "border-box" }}
+                style={{ width: "100%", fontSize: 17, fontWeight: 600, fontFamily: "'Lora', Georgia, serif", color: "#111", background: "#F3F0FE", border: "2px solid #7B73D6", borderRadius: 10, padding: "6px 10px", outline: "none", boxSizing: "border-box" }}
               />
             ) : (
-              <h3 style={{ fontSize: 17, fontWeight: 700, color: "#111", lineHeight: 1.3, margin: 0 }}>{event.title}</h3>
+              <h3 style={{ fontSize: 17, fontWeight: 600, fontFamily: "'Lora', Georgia, serif", color: "#111", lineHeight: 1.3, margin: 0 }}>{event.title}</h3>
             )}
             {!editMode && (
               <p style={{ fontSize: 12, color: "#999", marginTop: 3, fontWeight: 400 }}>
@@ -981,9 +981,10 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
           <span style={{
             fontSize: 12,
             fontWeight: 500,
+            fontFamily: "'Lora', Georgia, serif",
             color: textColor,
             textDecoration: isSkipped ? "line-through" : "none",
-            lineHeight: 1.25,
+            lineHeight: 1.3,
             display: "-webkit-box",
             WebkitLineClamp: 3,
             WebkitBoxOrient: "vertical",

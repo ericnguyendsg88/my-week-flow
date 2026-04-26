@@ -569,7 +569,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
               onChange={e => setDraftTitle(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") commitDraft(); if (e.key === "Escape") cancelDraft(); }}
               placeholder="Event title…"
-              style={{ width: "100%", fontSize: 17, fontWeight: 700, color: "#111", background: "#F3F0FE", border: "2px solid #7B73D6", borderRadius: 10, padding: "6px 10px", outline: "none", boxSizing: "border-box" }}
+              style={{ width: "100%", fontSize: 17, fontWeight: 600, fontFamily: "'Lora', Georgia, serif", color: "#111", background: "#F3F0FE", border: "2px solid #7B73D6", borderRadius: 10, padding: "6px 10px", outline: "none", boxSizing: "border-box" }}
             />
             <p style={{ fontSize: 12, color: "#999", marginTop: 5, fontWeight: 400 }}>
               {format(date, "EEE, MMM d")} · {minutesToLabel(draft.start)} → {minutesToLabel(draft.start + draft.duration)} · {durationLabel(draft.duration)}

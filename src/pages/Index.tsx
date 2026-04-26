@@ -609,7 +609,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
       >
         {/* Header */}
         <div style={{ padding: "24px 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h1 style={{ fontSize: 24, fontWeight: 600, color: "hsl(var(--foreground))" }}>Horizon</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 600, fontFamily: "'Lora', Georgia, serif", color: "hsl(var(--foreground))", letterSpacing: "-0.02em" }}>Horizon</h1>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {viewMode === "focus" && (
               <button
@@ -727,7 +727,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                 </div>
               ) : (
                 <div>
-                  <p style={{ fontSize: 14, fontWeight: 700, color: "#1D5C17", lineHeight: 1.2 }}>{format(selectedDate, "EEEE")}</p>
+                  <p style={{ fontSize: 14, fontWeight: 600, fontFamily: "'Lora', Georgia, serif", color: "#1D5C17", lineHeight: 1.2 }}>{format(selectedDate, "EEEE")}</p>
                   <p style={{ fontSize: 11, color: "#3A8733", marginTop: 2, fontWeight: 500 }}>{format(selectedDate, "MMM d, yyyy")}</p>
                 </div>
               )}
@@ -943,7 +943,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
           <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, flexShrink: 1, overflow: "hidden" }}>
             {viewMode === "focus" ? (
               <div style={{ minWidth: 0 }}>
-                <h2 style={{ fontSize: 28, fontWeight: 700, lineHeight: "1.1", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <h2 style={{ fontSize: 28, fontWeight: 600, fontFamily: "'Lora', Georgia, serif", lineHeight: "1.1", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.02em" }}>
                   {isToday(focusDate) ? "Today" : format(focusDate, "EEEE")}
                 </h2>
                 <p style={{ fontSize: 13, color: "hsl(var(--muted-foreground))", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -954,7 +954,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
               <div /> // header lives inside MonthView
             ) : (
               <div style={{ minWidth: 0 }}>
-                <h2 style={{ fontSize: 28, fontWeight: 700, lineHeight: "1.1", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{format(weekDates[0], "MMMM yyyy")}</h2>
+                <h2 style={{ fontSize: 28, fontWeight: 600, fontFamily: "'Lora', Georgia, serif", lineHeight: "1.1", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.02em" }}>{format(weekDates[0], "MMMM yyyy")}</h2>
                 <p style={{ fontSize: 13, color: "hsl(var(--muted-foreground))", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {format(weekDates[0], "EEE d")} → {format(weekDates[weekDates.length - 1], "EEE d")}
                 </p>
@@ -1166,7 +1166,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
             transition={{ type: "spring", stiffness: 380, damping: 28 }}
             style={{ position: "fixed", bottom: 36, right: 36, background: "#FAFAF8", borderRadius: 20, padding: "28px 28px 24px", boxShadow: "0 20px 60px -12px rgba(0,0,0,0.18), 0 4px 16px -4px rgba(0,0,0,0.08)", zIndex: 200, width: 340 }}
           >
-            <p style={{ fontSize: 20, fontWeight: 700, color: "#111", marginBottom: 6, lineHeight: 1.2 }}>Did this happen?</p>
+            <p style={{ fontSize: 20, fontWeight: 600, fontFamily: "'Lora', Georgia, serif", color: "#111", marginBottom: 6, lineHeight: 1.2 }}>Did this happen?</p>
             <p style={{ fontSize: 15, color: "#888", marginBottom: 24, fontWeight: 400 }}>
               {promptEvent.title} · ended {minutesToLabel(promptEvent.start + promptEvent.duration)}
             </p>

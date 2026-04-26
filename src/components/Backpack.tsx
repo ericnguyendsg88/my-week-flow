@@ -105,7 +105,7 @@ function ThoughtCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: 
         <span style={{ fontSize: 9, fontWeight: 500, color: "#5F5E5A", textTransform: "uppercase", letterSpacing: "0.07em" }}>thought</span>
         <span style={{ marginLeft: "auto" }}><Timestamp ts={item.createdAt} color="#A8A4A0" /></span>
       </div>
-      <p style={{ fontSize: 13, fontWeight: 500, color: "#444441", lineHeight: 1.5, wordBreak: "break-word" }}>
+      <p style={{ fontSize: 13, fontWeight: 400, fontFamily: "'Lora', Georgia, serif", color: "#444441", lineHeight: 1.6, wordBreak: "break-word" }}>
         {renderFormattedText(item.title)}
       </p>
       <CardActions onPlace={onPlace} onRemove={onRemove} accent={{ bg: "#F1EFE8", text: "#444441" }} />
@@ -124,7 +124,7 @@ function TaskCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
           <Square size={8} color="#5F5E5A" strokeWidth={2} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: 13, fontWeight: 500, color: "#444441", lineHeight: 1.45, wordBreak: "break-word" }}>
+          <p style={{ fontSize: 13, fontWeight: 400, fontFamily: "'Lora', Georgia, serif", color: "#444441", lineHeight: 1.5, wordBreak: "break-word" }}>
             {renderFormattedText(item.title)}
           </p>
           <span style={{ marginTop: 3, display: "block" }}><Timestamp ts={item.createdAt} color="#A8A4A0" /></span>
@@ -363,7 +363,7 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
       ) : (
         <p
           onClick={() => item.url && window.open(item.url, "_blank")}
-          style={{ fontSize: 13, fontWeight: 500, color: "#444441", lineHeight: 1.4, wordBreak: "break-word", cursor: item.url ? "pointer" : "default", marginBottom: 6 }}
+          style={{ fontSize: 13, fontWeight: 500, fontFamily: "'Lora', Georgia, serif", color: "#444441", lineHeight: 1.4, wordBreak: "break-word", cursor: item.url ? "pointer" : "default", marginBottom: 6 }}
         >
           {displayTitle}
         </p>
