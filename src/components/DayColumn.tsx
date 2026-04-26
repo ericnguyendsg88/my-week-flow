@@ -65,8 +65,12 @@ interface Props {
   compact?: boolean;
 }
 
-const timeToY = (mins: number) => Math.max(0, mins - 7 * 60);
-const yToTime = (y: number) => y + 7 * 60;
+const DAY_START = 6 * 60;   // 6am
+const DAY_END   = 24 * 60;  // midnight
+const DAY_HOURS = (DAY_END - DAY_START) / 60; // 18
+
+const timeToY = (mins: number) => Math.max(0, mins - DAY_START);
+const yToTime = (y: number) => y + DAY_START;
 
 type Section = "MORNING" | "AFTERNOON" | "EVENING";
 
@@ -130,7 +134,7 @@ function TaskPill({ task, timelineRef }: { task: CaptureItem; timelineRef: React
     function onMove(ev: MouseEvent) {
       if (!dragRef.current) return;
       const deltaY = ev.clientY - dragRef.current.startY;
-      const newStart = Math.max(7 * 60, Math.min(21 * 60, snapStart(dragRef.current.origStart + deltaY)));
+      const newStart = Math.max(DAY_START, Math.min(DAY_END - 30, snapStart(dragRef.current.origStart + deltaY)));
       setLiveStart(newStart);
     }
     function onUp() {
@@ -372,7 +376,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
         setLiveStart(event.start);
       }
       const newStart = snapStart(moveDragRef.current.origStart + delta);
-      const clamped = Math.max(7 * 60, Math.min(22 * 60 - event.duration, newStart));
+      const clamped = Math.max(DAY_START, Math.min(DAY_END - event.duration, newStart));
       setLiveStart(clamped);
     }
 
@@ -382,7 +386,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
       if (dragging && moveDragRef.current) {
         const delta = e.clientY - moveDragRef.current.startY;
         const newStart = snapStart(moveDragRef.current.origStart + delta);
-        const clamped = Math.max(7 * 60, Math.min(22 * 60 - event.duration, newStart));
+        const clamped = Math.max(DAY_START, Math.min(DAY_END - event.duration, newStart));
         if (clamped !== moveDragRef.current.origStart) onUpdate?.(event.id, { start: clamped });
       }
       moveDragRef.current = null;
@@ -737,7 +741,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
       display: "flex",
       flexDirection: "column",
       minWidth: focusMode ? 0 : 120,
-      minHeight: 80 + 15 * 60,
+      minHeight: 80 + DAY_HOURS * 60,
       position: "relative",
       opacity: colOpacity,
       boxShadow: isT ? "0 0 0 0" : "none",
@@ -858,7 +862,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         style={{
-          position: "relative", height: 15 * 60, margin: "0 12px",
+          position: "relative", height: DAY_HOURS * 60, margin: "0 12px",
           cursor: onCreate ? "crosshair" : "default",
           outline: isDragOver ? "2px dashed #7B73D6" : "none",
           outlineOffset: 2,
@@ -867,8 +871,8 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
         }}
       >
         {/* Hour grid lines & markers */}
-        {Array.from({ length: 16 }, (_, i) => i).map((i) => {
-          const hour = 7 + i;
+        {Array.from({ length: DAY_HOURS + 1 }, (_, i) => i).map((i) => {
+          const hour = DAY_START / 60 + i;
           const isPM = hour >= 12;
           const hour12 = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
           return (
@@ -907,16 +911,16 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
             </div>
           );
         })}
-        {Array.from({ length: 15 }, (_, i) => i).map((i) => (
+        {Array.from({ length: DAY_HOURS }, (_, i) => i).map((i) => (
           <div key={`hh-${i}`} style={{ position: "absolute", top: i * 60 + 30, left: 0, right: 0, borderTop: "1px dashed rgba(0,0,0,0.03)", pointerEvents: "none", zIndex: 1 }} />
         ))}
 
         {/* Evening tint band */}
         <div style={{
           position: "absolute",
-          top: timeToY(17 * 60),
+          top: timeToY(18 * 60),
           left: 0, right: 0,
-          height: timeToY(22 * 60) - timeToY(17 * 60),
+          height: timeToY(24 * 60) - timeToY(18 * 60),
           background: "rgba(206,203,246,0.06)",
           borderRadius: 8,
           pointerEvents: "none",
@@ -924,9 +928,9 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
         }} />
 
         {/* Section headers */}
-        <AbsoluteSectionHeader title="MORNING"   y={timeToY(7 * 60)} />
+        <AbsoluteSectionHeader title="MORNING"   y={timeToY(6 * 60)} />
         <AbsoluteSectionHeader title="AFTERNOON" y={timeToY(12 * 60)} />
-        <AbsoluteSectionHeader title="EVENING"   y={timeToY(17 * 60)} />
+        <AbsoluteSectionHeader title="EVENING"   y={timeToY(18 * 60)} />
 
         {/* Ghost block while drag-creating / panel open */}
         {ghost && (
@@ -1017,7 +1021,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
                 top: timeToY(displayStart),
                 left: `${leftOffset}%`,
                 width: `${layout.width}%`,
-                height: Math.max(displayDuration, 76),
+                height: Math.max(displayDuration, 30),
                 zIndex: isResizing ? 15 : isMoving ? 16 : 10,
                 transition: (isResizing || isMoving) ? "none" : undefined,
                 cursor: isMoving ? "grabbing" : "grab",
@@ -1025,6 +1029,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
                 paddingLeft: layout.column > 0 ? 2 : 0,
                 paddingRight: layout.column < layout.maxColumns - 1 ? 2 : 0,
                 boxSizing: "border-box",
+                overflow: "hidden",
               }}
             >
               <EventBubble
@@ -1118,7 +1123,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
         ))}
 
         {/* Past wash — glassmorphism overlay for time before now */}
-        {isT && now >= 7 * 60 && now <= 22 * 60 && (
+        {isT && now >= DAY_START && now <= DAY_END && (
           <div style={{
             position: "absolute",
             top: 0,
@@ -1136,7 +1141,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
         )}
 
         {/* Now marker */}
-        {isT && now >= 7 * 60 && now <= 22 * 60 && (
+        {isT && now >= DAY_START && now <= DAY_END && (
           <div style={{ position: "absolute", top: timeToY(now) - 6, left: -4, right: 0, zIndex: 20 }}>
             <NowMarker />
           </div>
