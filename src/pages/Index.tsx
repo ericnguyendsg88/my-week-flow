@@ -134,6 +134,10 @@ const HorizonApp = ({ userId }: { userId: string }) => {
   const MIN_LEFT = 260;
   const MIN_COL_WIDTH = 120;
 
+  // ── Mobile ──
+  const isMobile = useIsMobile();
+  const [mobileTab, setMobileTab] = useState<"calendar" | "backpack">("backpack");
+
   const minRightWidth = useMemo(() =>
     40 + weekDates.length * MIN_COL_WIDTH + (weekDates.length - 1) * 8 + 48,
     [weekDates.length]
