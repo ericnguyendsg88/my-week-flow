@@ -724,8 +724,8 @@ const HorizonApp = ({ userId }: { userId: string }) => {
         </div>
       </div>
 
-      {/* ── RESIZE HANDLE / EXPAND BUTTON ── */}
-      {leftCollapsed ? (
+      {/* ── RESIZE HANDLE / EXPAND BUTTON (desktop only) ── */}
+      {!isMobile && (leftCollapsed ? (
         <button
           onClick={() => setLeftCollapsed(false)}
           title="Expand sidebar"
@@ -741,12 +741,24 @@ const HorizonApp = ({ userId }: { userId: string }) => {
             onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(0,0,0,0.10)")}
           />
         </div>
-      )}
+      ))}
 
       {/* ── RIGHT PANEL ── */}
       <div
-        className="flex flex-1 flex-col overflow-hidden"
-        style={{ background: "#F4F1ED", borderRadius: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", minWidth: minRightWidth }}
+        className="flex flex-col overflow-hidden"
+        style={
+          isMobile
+            ? {
+                display: mobileTab === "calendar" ? "flex" : "none",
+                flex: 1,
+                minHeight: 0,
+                width: "100%",
+                background: "#F4F1ED",
+                borderRadius: 16,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+              }
+            : { background: "#F4F1ED", borderRadius: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", minWidth: minRightWidth, flex: 1 }
+        }
       >
         {/* Header */}
         <div style={{ padding: "20px 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }} className="shrink-0">
