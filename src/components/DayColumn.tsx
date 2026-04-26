@@ -748,13 +748,26 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
     }}>
       {/* Header */}
       <div
-        style={{ padding: "14px 14px 8px", height: 76, boxSizing: "border-box", flexShrink: 0, borderRadius: "19px 19px 0 0", background: headerBg, display: "flex", flexDirection: "column", justifyContent: "space-between" }}
+        style={{ padding: "12px 12px 8px", height: 84, boxSizing: "border-box", flexShrink: 0, borderRadius: "19px 19px 0 0", background: headerBg, display: "flex", flexDirection: "column", justifyContent: "space-between" }}
       >
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", cursor: onDayClick ? "pointer" : "default", gap: 4, overflow: "hidden" }} onClick={() => onDayClick?.(date)}>
-          <h3 style={{ fontSize: focusMode ? 18 : 14, fontWeight: 500, color: titleColor, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{format(date, "EEEE")}</h3>
-          {isT && !focusMode && (
-            <span style={{ fontSize: 9, fontWeight: 500, color: "#3B6D11", letterSpacing: "0.07em", textTransform: "uppercase", flexShrink: 0 }}>today</span>
-          )}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", cursor: onDayClick ? "pointer" : "default", gap: 4, overflow: "hidden" }} onClick={() => onDayClick?.(date)}>
+          <div style={{ minWidth: 0, overflow: "hidden" }}>
+            <h3 style={{ fontSize: focusMode ? 18 : 13, fontWeight: 500, color: titleColor, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.2 }}>{format(date, "EEEE")}</h3>
+            <p style={{ fontSize: 10, color: subColor, fontWeight: 400, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.75 }}>{format(date, "MMM yyyy")}</p>
+          </div>
+          {/* Date number badge */}
+          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", marginTop: 1 }}>
+            <div style={{
+              width: 28, height: 28,
+              borderRadius: "50%",
+              background: isT ? "#3B6D11" : isSelected ? (dayTypeDef ? dayTypeDef.border : "#C8C4BE") : "rgba(0,0,0,0.06)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: isT || isSelected ? "#fff" : titleColor, lineHeight: 1, fontFamily: "'DM Sans', system-ui, sans-serif" }}>
+                {format(date, "d")}
+              </span>
+            </div>
+          </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4, overflow: "hidden" }}>
           <p style={{ fontSize: 11, color: subColor, fontWeight: 500, cursor: onDayClick ? "pointer" : "default", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }} onClick={() => onDayClick?.(date)}>{subtitle}</p>
