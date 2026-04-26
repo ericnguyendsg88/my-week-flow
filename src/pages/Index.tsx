@@ -270,7 +270,8 @@ const HorizonApp = ({ userId }: { userId: string }) => {
 
   const handleCommit = useCallback((e: CalEvent) => {
     dispatch({ type: "PUSH", events: [...events, e] });
-  }, [events]);
+    if (isMobile) setMobileTab("calendar");
+  }, [events, isMobile]);
 
   const handleResize = useCallback((eventId: string, newDuration: number) => {
     dispatch({ type: "PUSH", events: events.map((e) => e.id === eventId ? { ...e, duration: newDuration } : e) });
