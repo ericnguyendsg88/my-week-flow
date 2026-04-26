@@ -303,7 +303,8 @@ const HorizonApp = ({ userId }: { userId: string }) => {
   const [composerPrefill, setComposerPrefill] = useState<string | undefined>();
   const handleCreateEventFromItem = useCallback((item: import("@/types/event").CaptureItem) => {
     setComposerPrefill(item.title + "__" + Date.now()); // append timestamp to force re-trigger
-  }, []);
+    if (isMobile) setMobileTab("backpack");
+  }, [isMobile]);
 
   const unplaced = useUnplacedCount(todayKey);
   const allCaptures = useCaptures();
