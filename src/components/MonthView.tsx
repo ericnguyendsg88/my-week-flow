@@ -40,6 +40,8 @@ export function MonthView({ events, onDayClick }: Props) {
   const today = startOfDay(new Date());
   const scrollRef = useRef<HTMLDivElement>(null);
   const todayRowRef = useRef<HTMLDivElement>(null);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);   // "yyyy-MM-dd"
+  const [selectedWeek, setSelectedWeek] = useState<number | null>(null); // wi index
 
   // Build rolling weeks: WEEKS_BEFORE before today's week + today's week + WEEKS_AFTER after
   const todayWeekStart = startOfWeek(today, { weekStartsOn: 1 });
@@ -104,31 +106,29 @@ export function MonthView({ events, onDayClick }: Props) {
         {weeks.map((week, wi) => {
           const isCurrentWeek = week.some((d) => isToday(d));
           const isPastWeek = week[6] < today && !isCurrentWeek;
+          const isWeekSelected = selectedWeek === wi;
 
-          // Month boundary: first week that starts a new month (check if Monday is month start or crosses boundary)
+          // Month boundary divider
           const prevWeek = wi > 0 ? weeks[wi - 1] : null;
-          const showMonthDivider = prevWeek && (
-            week[0].getMonth() !== prevWeek[0].getMonth()
-          );
+          const showMonthDivider = prevWeek && week[0].getMonth() !== prevWeek[0].getMonth();
           const dividerMonth = showMonthDivider ? format(week[0], "MMMM yyyy") : null;
+
+          function handleWeekClick() {
+            setSelectedDay(null);
+            setSelectedWeek(v => v === wi ? null : wi);
+          }
 
           return (
             <div key={wi}>
               {/* Month boundary divider */}
               {showMonthDivider && (
                 <div style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "8px 12px",
-                  background: "#F8F6FF",
-                  borderBottom: "1px solid #E5E2DC",
-                  borderTop: "1px solid #E5E2DC",
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "8px 12px", background: "#F8F6FF",
+                  borderBottom: "1px solid #E5E2DC", borderTop: "1px solid #E5E2DC",
                 }}>
                   <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#7B73D6", flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#534AB7", letterSpacing: "0.03em" }}>
-                    {dividerMonth}
-                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#534AB7", letterSpacing: "0.03em" }}>{dividerMonth}</span>
                   <div style={{ flex: 1, height: 1, background: "#D8D4F8" }} />
                 </div>
               )}
@@ -141,31 +141,46 @@ export function MonthView({ events, onDayClick }: Props) {
                   gridTemplateColumns: "52px repeat(7, 1fr)",
                   minHeight: 72,
                   borderBottom: wi < weeks.length - 1 ? "1px solid #E5E2DC" : "none",
-                  outline: isCurrentWeek ? "2px solid #3B6D11" : "none",
+                  outline: isWeekSelected ? "2px solid #534AB7"
+                    : isCurrentWeek ? "2px solid #3B6D11"
+                    : "none",
                   outlineOffset: -1,
                   position: "relative",
-                  zIndex: isCurrentWeek ? 1 : 0,
+                  zIndex: isWeekSelected || isCurrentWeek ? 1 : 0,
                   opacity: isPastWeek ? 0.5 : 1,
+                  background: isWeekSelected ? "rgba(83,74,183,0.03)" : "transparent",
                 }}
               >
-                {/* Week gutter */}
-                <div style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "flex-start",
-                  paddingTop: 7,
-                  borderRight: "1px solid #E5E2DC",
-                  gap: 2,
-                }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: isCurrentWeek ? "#3B6D11" : "#C8C4BE", letterSpacing: "0.02em" }}>
+                {/* Week gutter — click to select entire week */}
+                <div
+                  onClick={handleWeekClick}
+                  title="Select week"
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "flex-start",
+                    paddingTop: 7,
+                    borderRight: "1px solid #E5E2DC",
+                    gap: 2,
+                    cursor: "pointer",
+                    background: isWeekSelected ? "rgba(83,74,183,0.07)" : "transparent",
+                    transition: "background 0.12s",
+                  }}
+                  onMouseEnter={e => { if (!isWeekSelected) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = isWeekSelected ? "rgba(83,74,183,0.07)" : "transparent"; }}
+                >
+                  <span style={{ fontSize: 9, fontWeight: 700, color: isWeekSelected ? "#534AB7" : isCurrentWeek ? "#3B6D11" : "#C8C4BE", letterSpacing: "0.02em" }}>
                     W{getWeek(week[0], { weekStartsOn: 1 })}
                   </span>
-                  <span style={{ fontSize: 8, color: "#C8C4BE", fontWeight: 500 }}>
+                  <span style={{ fontSize: 8, color: isWeekSelected ? "#7B73D6" : "#C8C4BE", fontWeight: 500 }}>
                     {format(week[0], "MMM d")}
                   </span>
-                  {isCurrentWeek && (
+                  {isCurrentWeek && !isWeekSelected && (
                     <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#3B6D11", marginTop: 2 }} />
+                  )}
+                  {isWeekSelected && (
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#534AB7", marginTop: 2 }} />
                   )}
                 </div>
 
@@ -184,7 +199,12 @@ export function MonthView({ events, onDayClick }: Props) {
                       isToday={todayDay}
                       isCurrentMonth={isCurrentMonthDay}
                       isLast={di === 6}
-                      onClick={() => onDayClick?.(day)}
+                      isSelected={selectedDay === dayKey}
+                      onClick={() => {
+                        setSelectedWeek(null);
+                        setSelectedDay(v => v === dayKey ? null : dayKey);
+                        onDayClick?.(day);
+                      }}
                     />
                   );
                 })}
@@ -203,10 +223,11 @@ interface DayCellProps {
   isToday: boolean;
   isCurrentMonth: boolean;
   isLast: boolean;
+  isSelected: boolean;
   onClick: () => void;
 }
 
-function DayCell({ day, dayEvents, isToday: todayDay, isCurrentMonth, isLast, onClick }: DayCellProps) {
+function DayCell({ day, dayEvents, isToday: todayDay, isCurrentMonth, isLast, isSelected, onClick }: DayCellProps) {
   const [hovered, setHovered] = useState(false);
   const sortedEvents = [...dayEvents].sort((a, b) => a.start - b.start);
   const laneEvents = sortedEvents.slice(0, 3);
@@ -218,9 +239,9 @@ function DayCell({ day, dayEvents, isToday: todayDay, isCurrentMonth, isLast, on
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        background: todayDay ? "#F7FBF4" : hovered ? "rgba(0,0,0,0.015)" : "transparent",
+        background: isSelected ? "rgba(83,74,183,0.05)" : todayDay ? "#F7FBF4" : hovered ? "rgba(0,0,0,0.015)" : "transparent",
         borderRight: isLast ? "none" : "1px solid #E5E2DC",
-        outline: todayDay ? "2px solid #3B6D11" : "none",
+        outline: isSelected ? "2px solid #534AB7" : todayDay ? "2px solid #3B6D11" : "none",
         outlineOffset: -1,
         padding: "5px 4px 4px",
         cursor: "pointer",
@@ -231,12 +252,17 @@ function DayCell({ day, dayEvents, isToday: todayDay, isCurrentMonth, isLast, on
         opacity: isCurrentMonth ? 1 : 0.35,
         transition: "background 0.1s",
         position: "relative",
+        zIndex: isSelected ? 1 : 0,
       }}
     >
       {/* Day number */}
       <div style={{ paddingLeft: 2, marginBottom: 1, flexShrink: 0 }}>
         {todayDay ? (
           <div style={{ width: 20, height: 20, borderRadius: "50%", background: "#3B6D11", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", lineHeight: 1 }}>{format(day, "d")}</span>
+          </div>
+        ) : isSelected ? (
+          <div style={{ width: 20, height: 20, borderRadius: "50%", background: "#534AB7", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", lineHeight: 1 }}>{format(day, "d")}</span>
           </div>
         ) : (
