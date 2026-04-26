@@ -24,8 +24,8 @@ import { Backpack } from "@/components/Backpack";
 
 import { MonthView } from "@/components/MonthView";
 import { nowMinutes, minutesToLabel } from "@/lib/event-utils";
-import { useCaptures, useUnplacedCount, setCaptureSyncUser, syncCapturesFromRemote } from "@/lib/capture-store";
-import { pullEvents, pushEvents, deleteEvent as sbDeleteEvent, useSyncStatus } from "@/lib/sync";
+import { useCaptures, useUnplacedCount, setCaptureSyncUser, syncCapturesFromRemote, applyRemoteCapture, applyRemoteCaptureDelete } from "@/lib/capture-store";
+import { pullEvents, pushEvents, deleteEvent as sbDeleteEvent, useSyncStatus, subscribeEvents, subscribeCaptures } from "@/lib/sync";
 import { AuthGate } from "@/components/AuthGate";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 
