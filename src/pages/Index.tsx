@@ -575,12 +575,44 @@ const HorizonApp = ({ userId }: { userId: string }) => {
               </button>
             )}
             <button
-              onClick={() => setLeftCollapsed(true)}
-              title="Collapse sidebar"
-              style={{ background: "transparent", border: "none", borderRadius: 8, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#AAA", fontSize: 16, lineHeight: 1 }}
-              onMouseEnter={e => (e.currentTarget.style.background = "rgba(0,0,0,0.06)")}
-              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-            >‹</button>
+              onClick={() => {
+                setLeftCollapsed(true);
+              }}
+              title="Hide sidebar"
+              aria-label="Hide sidebar"
+              style={{
+                background: "#F3EFE8",
+                border: "1px solid #E1DAD0",
+                borderRadius: 999,
+                minWidth: 98,
+                height: 32,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                cursor: "pointer",
+                color: "#5B5247",
+                fontSize: 11,
+                fontWeight: 600,
+                padding: "0 12px",
+                lineHeight: 1,
+                transition: "all 0.18s ease",
+                boxShadow: "0 1px 2px rgba(91,82,71,0.08)",
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = "#EFE9E0";
+                e.currentTarget.style.transform = "translateY(-1px)";
+                e.currentTarget.style.boxShadow = "0 3px 8px rgba(91,82,71,0.14)";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = "#F3EFE8";
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 1px 2px rgba(91,82,71,0.08)";
+              }}
+            >
+              <span>Hide</span>
+              <span style={{ fontSize: 13, opacity: 0.65 }}>‹</span>
+            </button>
           </div>
         </div>
 
@@ -761,13 +793,78 @@ const HorizonApp = ({ userId }: { userId: string }) => {
 
       {/* ── RESIZE HANDLE / EXPAND BUTTON (desktop only) ── */}
       {!isMobile && (leftCollapsed ? (
-        <button
+        <div
+          title="Sidebar shortcuts (click to open)"
+          aria-label="Sidebar shortcuts"
           onClick={() => setLeftCollapsed(false)}
-          title="Expand sidebar"
-          style={{ width: 20, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "none", cursor: "pointer", color: "#AAA", fontSize: 16, borderRadius: 8, transition: "color 0.15s" }}
-          onMouseEnter={e => (e.currentTarget.style.color = "#555")}
-          onMouseLeave={e => (e.currentTarget.style.color = "#AAA")}
-        >›</button>
+          style={{
+            width: 54,
+            flexShrink: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "space-between",
+            background: "#F3EFE8",
+            border: "1px solid #E1DAD0",
+            color: "#5B5247",
+            fontSize: 12,
+            borderRadius: 14,
+            transition: "all 0.18s ease",
+            boxShadow: "0 2px 10px rgba(91,82,71,0.10)",
+            marginLeft: 2,
+            marginRight: 2,
+            padding: "8px 0",
+            gap: 12,
+            cursor: "pointer",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.boxShadow = "0 5px 14px rgba(91,82,71,0.16)";
+            e.currentTarget.style.background = "#EFE9E0";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.boxShadow = "0 2px 8px rgba(91,82,71,0.10)";
+            e.currentTarget.style.background = "#F3EFE8";
+          }}
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setLeftCollapsed(false);
+            }}
+            title="Keep sidebar open"
+            aria-label="Keep sidebar open"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              border: "1px solid #DDD4C8",
+              background: "#FBF8F3",
+              color: "#6B6054",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 15,
+              fontWeight: 700,
+            }}
+          >
+            ›
+          </button>
+
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, opacity: 0.9 }}>
+            <span title="Calendar view and week navigation" aria-label="Calendar view and week navigation" style={{ display: "inline-flex" }}>
+              <CalendarRange size={16} />
+            </span>
+            <span title="Quick capture and backpack inbox" aria-label="Quick capture and backpack inbox" style={{ display: "inline-flex" }}>
+              <Sparkles size={16} />
+            </span>
+            <span title="Today's date and daily context panel" aria-label="Today's date and daily context panel" style={{ display: "inline-flex" }}>
+              <CalendarDays size={16} />
+            </span>
+          </div>
+
+          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", color: "#7A7065" }}>SIDEBAR</span>
+        </div>
       ) : (
         <div onMouseDown={handleResizeMouseDown} style={{ width: 16, flexShrink: 0, cursor: "col-resize", display: "flex", alignItems: "center", justifyContent: "center", userSelect: "none" }}>
           <div
