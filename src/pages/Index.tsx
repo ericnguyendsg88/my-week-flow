@@ -14,7 +14,8 @@ import {
   startOfWeek,
   subWeeks,
 } from "date-fns";
-import { Undo2, Redo2, Calendar, CalendarDays, EyeOff } from "lucide-react";
+import { Undo2, Redo2, Calendar, CalendarDays, EyeOff, Sparkles, CalendarRange } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { CalEvent, Tag } from "@/types/event";
 import { DEFAULT_TAGS } from "@/lib/tags";
 import { TaskComposer } from "@/components/TaskComposer";
