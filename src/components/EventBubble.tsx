@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { format, eachDayOfInterval, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isSameMonth, addMonths, subMonths } from "date-fns";
-import { X, Trash2, Check, Ban, RotateCcw, Lightbulb, Link2, FileText, Bookmark, CheckSquare, ExternalLink, Pencil, Plus, type LucideIcon } from "lucide-react";
+import { X, Trash2, Check, Ban, RotateCcw, Lightbulb, Link2, FileText, Bookmark, CheckSquare, ExternalLink, Pencil, Plus, Share2, type LucideIcon } from "lucide-react";
+import { ShareInviteModal } from "./ShareInviteModal";
 import { CalEvent, CaptureKind, Tag, SpendingRecord, SpendingCategory, SPENDING_CATEGORIES } from "@/types/event";
 import { getTag } from "@/lib/tags";
 import { minutesToLabel, durationLabel, nowMinutes } from "@/lib/event-utils";
@@ -145,6 +146,7 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
   const tag = tags ? getTag(tags, event.tagId) : undefined;
   const colors = tagColors(tag?.id ?? event.tagId);
   const [showDetail, setShowDetail] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const [panelPos, setPanelPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const bubbleRef = useRef<HTMLDivElement>(null);
 
@@ -804,7 +806,16 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
             )}
 
             {(onCopy || onDelete) && (
-              <div style={{ padding: "0 18px 16px", display: "flex", gap: 8 }}>
+              <div style={{ padding: "0 18px 16px", display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => { setShowShare(true); setShowDetail(false); }}
+                  style={{ flex: "1 1 100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "linear-gradient(135deg, #FBEAF0, #FAEEDA)", color: "#72243E", border: "1.5px solid #F4C0D1", borderRadius: 12, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "filter 0.15s" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.filter = "brightness(0.97)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.filter = "none")}
+                >
+                  <Share2 size={14} strokeWidth={2.2} /> Share as invitation
+                </button>
                 {onCopy && (
                   <button
                     type="button"
@@ -1039,6 +1050,7 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
       </motion.div>
 
       {detailPanel}
+      {showShare && <ShareInviteModal event={event} onClose={() => setShowShare(false)} />}
     </>
   );
 }
