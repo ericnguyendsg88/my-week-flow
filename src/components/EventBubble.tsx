@@ -806,7 +806,16 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
             )}
 
             {(onCopy || onDelete) && (
-              <div style={{ padding: "0 18px 16px", display: "flex", gap: 8 }}>
+              <div style={{ padding: "0 18px 16px", display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => { setShowShare(true); setShowDetail(false); }}
+                  style={{ flex: "1 1 100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "linear-gradient(135deg, #FBEAF0, #FAEEDA)", color: "#72243E", border: "1.5px solid #F4C0D1", borderRadius: 12, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "filter 0.15s" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.filter = "brightness(0.97)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.filter = "none")}
+                >
+                  <Share2 size={14} strokeWidth={2.2} /> Share as invitation
+                </button>
                 {onCopy && (
                   <button
                     type="button"
