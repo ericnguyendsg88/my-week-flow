@@ -40,3 +40,40 @@ create table captures (
   meal_type   text,
   created_at  timestamptz default now()
 );
+
+-- Public invitation cards. Anyone with the link can read & RSVP.
+create table if not exists invitations (
+  id          text primary key,
+  host_name   text,
+  title       text not null,
+  date        text not null,
+  start       integer not null,
+  duration    integer not null,
+  where_      text,
+  tag_id      text,
+  note        text,
+  created_at  timestamptz default now()
+);
+
+create table if not exists invitation_rsvps (
+  id            uuid primary key default gen_random_uuid(),
+  invitation_id text not null references invitations(id) on delete cascade,
+  guest_name    text not null,
+  status        text not null check (status in ('accepted','declined','maybe')),
+  message       text,
+  created_at    timestamptz default now()
+);
+
+alter table invitations enable row level security;
+alter table invitation_rsvps enable row level security;
+
+-- Anyone (anon + auth) can read invitations & RSVPs
+drop policy if exists "public read invitations" on invitations;
+create policy "public read invitations" on invitations for select using (true);
+drop policy if exists "public insert invitations" on invitations;
+create policy "public insert invitations" on invitations for insert with check (true);
+
+drop policy if exists "public read rsvps" on invitation_rsvps;
+create policy "public read rsvps" on invitation_rsvps for select using (true);
+drop policy if exists "public insert rsvps" on invitation_rsvps;
+create policy "public insert rsvps" on invitation_rsvps for insert with check (true);
