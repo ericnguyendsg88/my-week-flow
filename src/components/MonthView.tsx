@@ -4,12 +4,12 @@ import {
   startOfWeek, endOfWeek, addWeeks, subWeeks,
   getWeek, isSameMonth, startOfDay,
 } from "date-fns";
-import { CalEvent } from "@/types/event";
+import { CalEvent, Tag } from "@/types/event";
 import { nowMinutes } from "@/lib/event-utils";
 
 interface Props {
   events: CalEvent[];
-  tags?: never[];
+  tags?: Tag[];
   onDayClick?: (date: Date) => void;
   onDayNavigate?: (date: Date) => void;
 }
