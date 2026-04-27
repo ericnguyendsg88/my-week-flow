@@ -882,7 +882,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
           outlineOffset: 2,
           borderRadius: 8,
           transition: "outline 0.1s",
-          overflow: "hidden",
+          overflow: "visible",
         }}
       >
         {/* Hour grid lines & markers */}

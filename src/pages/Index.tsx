@@ -14,7 +14,7 @@ import {
   startOfWeek,
   subWeeks,
 } from "date-fns";
-import { Undo2, Redo2, Calendar, CalendarDays, EyeOff, Sparkles, CalendarRange, Settings } from "lucide-react";
+import { Undo2, Redo2, Calendar, CalendarDays, EyeOff, Sparkles, CalendarRange, Settings, LayoutGrid, CheckSquare, Clock, Sun, User, Plus } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CalEvent, Tag } from "@/types/event";
 import { DEFAULT_TAGS } from "@/lib/tags";
@@ -102,7 +102,7 @@ const Index = () => {
   if (!supabaseConfigured) return <HorizonApp userId="local" />;
 
   if (checking) return (
-    <div style={{ minHeight: "100vh", background: "#F4F1ED", display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ minHeight: "100vh", background: "#FAFAF8", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid #CECBF6", borderTopColor: "#3C3489", animation: "spin 0.7s linear infinite" }} />
     </div>
   );
@@ -145,6 +145,9 @@ const HorizonApp = ({ userId }: { userId: string }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [leftPanelWidth, setLeftPanelWidth] = useState(380);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [sidebarHovered, setSidebarHovered] = useState(false);
+  // When collapsed, hovering the rail temporarily shows the full sidebar as an overlay
+  const sidebarExpanded = !leftCollapsed || sidebarHovered;
   const isDragging = useRef(false);
   const MIN_LEFT = 260;
   const MIN_COL_WIDTH = 120;
@@ -592,7 +595,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
     <div
       ref={containerRef}
       style={{
-        background: "#F4F4F6",
+        background: "#FAFAF8",
         padding: isMobile ? "8px 8px 76px" : "16px",
       }}
       className={
@@ -604,6 +607,8 @@ const HorizonApp = ({ userId }: { userId: string }) => {
       {/* ── LEFT PANEL ── */}
       <div
         className="flex flex-col overflow-hidden"
+        onMouseEnter={() => { if (leftCollapsed) setSidebarHovered(true); }}
+        onMouseLeave={() => setSidebarHovered(false)}
         style={
           isMobile
             ? {
@@ -611,328 +616,297 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                 flex: 1,
                 minHeight: 0,
                 width: "100%",
-                background: "#F4F1ED",
+                background: "#FAFAF8",
                 borderRadius: 16,
                 boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
               }
             : {
-                width: leftCollapsed ? 0 : leftPanelWidth,
-                minWidth: leftCollapsed ? 0 : MIN_LEFT,
+                // Always a normal flex child — width drives right panel to shrink/grow
+                width: leftCollapsed ? (sidebarHovered ? leftPanelWidth : 56) : leftPanelWidth,
+                minWidth: leftCollapsed ? 56 : MIN_LEFT,
                 maxWidth: 520,
-                background: "#F4F1ED",
-                borderRadius: 20,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-                transition: "width 0.22s cubic-bezier(0.4,0,0.2,1), min-width 0.22s",
-                opacity: leftCollapsed ? 0 : 1,
                 flexShrink: 0,
+                background: "#FAFAF8",
+                borderRadius: 20,
+                boxShadow: sidebarHovered && leftCollapsed ? "0 8px 32px rgba(0,0,0,0.16)" : "0 1px 4px rgba(0,0,0,0.07)",
+                transition: "width 0.25s cubic-bezier(0.4,0,0.2,1), box-shadow 0.25s",
+                overflow: "hidden",
               }
         }
       >
-        {/* Header */}
-        <div style={{ padding: "24px 24px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h1 style={{ fontSize: 24, fontWeight: 600, fontFamily: "'Lora', Georgia, serif", color: "hsl(var(--foreground))", letterSpacing: "-0.02em" }}>Horizon</h1>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {viewMode === "focus" && (
-              <button
-                onClick={() => setViewMode("week")}
-                title="Exit focus mode"
-                style={{ background: "rgba(123,115,214,0.1)", border: "none", borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 600, color: "#7B73D6", cursor: "pointer", letterSpacing: "0.03em" }}
-              >
-                ← week
-              </button>
-            )}
-            <button
-              onClick={() => {
-                setLeftCollapsed(true);
-              }}
-              title="Hide sidebar"
-              aria-label="Hide sidebar"
-              style={{
-                background: "#F3EFE8",
-                border: "1px solid #E1DAD0",
-                borderRadius: 999,
-                minWidth: 98,
-                height: 32,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                cursor: "pointer",
-                color: "#5B5247",
-                fontSize: 11,
-                fontWeight: 600,
-                padding: "0 12px",
-                lineHeight: 1,
-                transition: "all 0.18s ease",
-                boxShadow: "0 1px 2px rgba(91,82,71,0.08)",
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = "#EFE9E0";
-                e.currentTarget.style.transform = "translateY(-1px)";
-                e.currentTarget.style.boxShadow = "0 3px 8px rgba(91,82,71,0.14)";
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = "#F3EFE8";
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "0 1px 2px rgba(91,82,71,0.08)";
-              }}
+        {/* ── Icon-only collapsed view (shown when leftCollapsed and not hovered) ── */}
+        {leftCollapsed && !sidebarHovered && (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "14px 0", gap: 2, flex: 1 }}>
+            {/* Logo mark */}
+            <div style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: "linear-gradient(135deg, #6C63D5 0%, #4B41B8 100%)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 2px 8px rgba(75,65,184,0.28)",
+              marginBottom: 14, flexShrink: 0,
+            }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M8 2L14 6V10L8 14L2 10V6L8 2Z" stroke="rgba(255,255,255,0.9)" strokeWidth="1.4" strokeLinejoin="round"/>
+                <circle cx="8" cy="8" r="2" fill="rgba(255,255,255,0.85)"/>
+              </svg>
+            </div>
+            {([
+              { Icon: CalendarRange, id: "week" as const, label: "Week" },
+              { Icon: CalendarDays, id: "month" as const, label: "Month" },
+              { Icon: Sun, id: "focus" as const, label: "Focus" },
+            ]).map(({ Icon, id, label }) => {
+              const active = viewMode === id;
+              return (
+                <button key={id} title={label}
+                  onClick={() => { if (id === "focus") { setFocusDate(today); setSelectedDate(today); } setViewMode(id); }}
+                  style={{ width: 36, height: 36, borderRadius: 9, border: "none", background: active ? "#EEEDFE" : "transparent", color: active ? "#534AB7" : "#9B9590", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.13s" }}
+                  onMouseEnter={e => { if (!active) e.currentTarget.style.background = "#F0EDE8"; }}
+                  onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
+                >
+                  <Icon size={16} strokeWidth={active ? 2.2 : 1.8} />
+                </button>
+              );
+            })}
+            <div style={{ height: 1, width: 28, background: "#EDE9E4", margin: "8px 0" }} />
+            <button title="Backpack" style={{ width: 36, height: 36, borderRadius: 9, border: "none", background: "transparent", color: "#9B9590", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", flexShrink: 0 }}
+              onMouseEnter={e => { e.currentTarget.style.background = "#F0EDE8"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
             >
-              <span>Hide</span>
-              <span style={{ fontSize: 13, opacity: 0.65 }}>‹</span>
+              <CheckSquare size={16} strokeWidth={1.8} />
+              {unplaced > 0 && <span style={{ position: "absolute", top: 5, right: 5, width: 7, height: 7, borderRadius: "50%", background: "#7B73D6" }} />}
+            </button>
+            <button title="Floating thoughts" style={{ width: 36, height: 36, borderRadius: 9, border: "none", background: "transparent", color: "#9B9590", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+              onMouseEnter={e => { e.currentTarget.style.background = "#F0EDE8"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+            >
+              <Sparkles size={16} strokeWidth={1.8} />
+            </button>
+            <div style={{ flex: 1 }} />
+            <button onClick={() => setSettingsOpen(true)} title="Settings" style={{ width: 36, height: 36, borderRadius: 9, border: "none", background: "transparent", color: "#9B9590", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+              onMouseEnter={e => { e.currentTarget.style.background = "#F0EDE8"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+            >
+              <Settings size={15} strokeWidth={1.8} />
             </button>
           </div>
-        </div>
+        )}
 
-        {/* Analog clock in focus mode */}
-        <AnimatePresence>
-          {viewMode === "focus" && (
-            <motion.div
-              key="clock"
-              initial={{ opacity: 0, scale: 0.88, y: -8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.88, y: -8 }}
-              transition={{ type: "spring", stiffness: 340, damping: 26 }}
-              style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingBottom: 16, gap: 10 }}
-            >
-              <AnalogClock size={148} />
-              <div style={{ fontSize: 12, fontWeight: 500, fontFamily: "'Lora', Georgia, serif", color: "#7B73D6", letterSpacing: "0.01em", opacity: 0.85 }}>
-                {format(focusDate, "EEEE, MMMM d")}
+        {/* ── Full expanded sidebar (always rendered when !leftCollapsed, or when hovered-over collapsed) ── */}
+        {sidebarExpanded && (
+          <>
+            {/* ── App Logo + Title ── */}
+            <div style={{ padding: "20px 20px 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 34, height: 34, borderRadius: 10, background: "linear-gradient(135deg, #6C63D5 0%, #4B41B8 100%)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(75,65,184,0.28)", flexShrink: 0 }}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 2L14 6V10L8 14L2 10V6L8 2Z" stroke="rgba(255,255,255,0.9)" strokeWidth="1.4" strokeLinejoin="round"/>
+                    <circle cx="8" cy="8" r="2" fill="rgba(255,255,255,0.85)"/>
+                  </svg>
+                </div>
+                <span style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Lora', Georgia, serif", color: "#1A1816", letterSpacing: "-0.02em" }}>Horizon</span>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              <button
+                onClick={() => { setLeftCollapsed(true); setSidebarHovered(false); }}
+                title="Collapse sidebar"
+                style={{ width: 28, height: 28, borderRadius: 8, background: "transparent", border: "none", color: "#B0ACA6", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, transition: "all 0.15s" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#F0EDE8"; e.currentTarget.style.color = "#6B6460"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#B0ACA6"; }}
+              >‹</button>
+            </div>
 
-        {/* Date Navigator */}
-        <div style={{ padding: "0 24px", marginBottom: 16 }}>
-          <div style={{ background: "#EDF6EB", borderRadius: 14, padding: "10px 8px", display: "flex", alignItems: "center", gap: 4 }}>
-            <button
-              onClick={prevDay}
-              style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(255,255,255,0.55)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#3A8733", fontSize: 18, flexShrink: 0, lineHeight: 1 }}
-            >‹</button>
-
-            <div style={{ flex: 1, textAlign: "center" }}>
-              {isViewingToday ? (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                  {/* Row 1: pulse dot + Now time + divider + time of day */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#B6DFB0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#3A8733" }} />
-                    </span>
-                    <span style={{ fontSize: 14, fontWeight: 600, fontFamily: "'Lora', Georgia, serif", color: "#1D5C17", whiteSpace: "nowrap" }}>Now · {nowTime}</span>
-                    <div style={{ width: 1, height: 14, background: "#B6DFB0", opacity: 0.6, flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, fontWeight: 500, color: "#3A8733", whiteSpace: "nowrap" }}>{timeOfDay}</span>
+            {/* Analog clock in focus mode */}
+            <AnimatePresence>
+              {viewMode === "focus" && (
+                <motion.div key="clock" initial={{ opacity: 0, scale: 0.88, y: -8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.88, y: -8 }} transition={{ type: "spring", stiffness: 340, damping: 26 }}
+                  style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "16px 0 8px", gap: 8, flexShrink: 0 }}
+                >
+                  <AnalogClock size={130} />
+                  <div style={{ fontSize: 12, fontWeight: 500, fontFamily: "'Lora', Georgia, serif", color: "#7B73D6", letterSpacing: "0.01em", opacity: 0.85 }}>
+                    {format(focusDate, "EEEE, MMMM d")}
                   </div>
-                  {/* Row 2: date + weather */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
-                    <span style={{ fontSize: 11, fontWeight: 500, color: "#3A8733", opacity: 0.8, whiteSpace: "nowrap" }}>
-                      {format(today, "EEE, MMM d")}
-                    </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Scrollable body */}
+            <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 14px 8px" }}>
+
+              {/* ── VIEWS section ── */}
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", color: "#B8B4AE", textTransform: "uppercase", padding: "0 8px", marginBottom: 4 }}>Views</div>
+                {([
+                  { id: "week" as const, label: "Week", Icon: CalendarRange },
+                  { id: "month" as const, label: "Month", Icon: CalendarDays },
+                  { id: "focus" as const, label: "Focus", Icon: Sun },
+                ]).map(({ id, label, Icon }) => {
+                  const active = viewMode === id;
+                  return (
+                    <button key={id}
+                      onClick={() => { if (id === "focus") { setFocusDate(today); setSelectedDate(today); } setViewMode(id); }}
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 10, border: "none", background: active ? "#EEEDFE" : "transparent", color: active ? "#3C3489" : "#6B6460", cursor: "pointer", fontSize: 13, fontWeight: active ? 600 : 500, transition: "all 0.13s", textAlign: "left", marginBottom: 1 }}
+                      onMouseEnter={e => { if (!active) e.currentTarget.style.background = "#F3F0EC"; }}
+                      onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <Icon size={15} strokeWidth={active ? 2.2 : 1.8} style={{ flexShrink: 0, color: active ? "#534AB7" : "#9B9590" }} />
+                      {label}
+                      {active && <span style={{ marginLeft: "auto", width: 6, height: 6, borderRadius: "50%", background: "#534AB7", flexShrink: 0 }} />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ height: 1, background: "#EDE9E4", margin: "8px 0" }} />
+
+              {/* ── CAPTURE section ── */}
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", color: "#B8B4AE", textTransform: "uppercase", padding: "0 8px", marginBottom: 4 }}>Capture</div>
+                <button style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 10, border: "none", background: "transparent", color: "#6B6460", cursor: "pointer", fontSize: 13, fontWeight: 500, transition: "all 0.13s", textAlign: "left", marginBottom: 1 }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "#F3F0EC"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  <CheckSquare size={15} strokeWidth={1.8} style={{ flexShrink: 0, color: "#9B9590" }} />
+                  Backpack
+                  {unplaced > 0 && <span style={{ marginLeft: "auto", background: "#7B73D6", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 20, padding: "1px 6px", flexShrink: 0 }}>{unplaced} new</span>}
+                </button>
+                <button style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 10, border: "none", background: "transparent", color: "#6B6460", cursor: "pointer", fontSize: 13, fontWeight: 500, transition: "all 0.13s", textAlign: "left" }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "#F3F0EC"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  <Sparkles size={15} strokeWidth={1.8} style={{ flexShrink: 0, color: "#9B9590" }} />
+                  Floating thoughts
+                  {allCaptures.filter(c => !c.dayKey).length > 0 && <span style={{ marginLeft: "auto", background: "#F0DCC8", color: "#6B3A10", fontSize: 9, fontWeight: 700, borderRadius: 20, padding: "1px 6px", flexShrink: 0 }}>{allCaptures.filter(c => !c.dayKey).length}</span>}
+                </button>
+              </div>
+
+              <div style={{ height: 1, background: "#EDE9E4", margin: "8px 0" }} />
+
+              {/* ── QUICK ADD section ── */}
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", color: "#B8B4AE", textTransform: "uppercase", padding: "0 8px", marginBottom: 8 }}>Quick Add</div>
+                <div style={{ padding: "0 4px" }}>
+                  <TaskComposer weekDates={weekDates} events={events} tags={tags} onCommit={handleCommit} prefill={composerPrefill} />
+                </div>
+              </div>
+
+              <div style={{ height: 1, background: "#EDE9E4", margin: "8px 0" }} />
+
+              {/* ── THIS WEEK / TODAY'S CAPTURES ── */}
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", color: "#B8B4AE", textTransform: "uppercase", padding: "0 8px", marginBottom: 8 }}>This Week</div>
+                <div style={{ background: "#F5F3FF", border: "1px solid #DDD8F8", borderRadius: 14, padding: "12px 14px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#534AB7", letterSpacing: "0.03em", textTransform: "uppercase" }}>Today's Captures</span>
+                    <span style={{ fontSize: 10, color: "#8B83D4", fontWeight: 500, cursor: "pointer" }}>see all →</span>
+                  </div>
+                  {(() => {
+                    const todayCaps = allCaptures.filter(c => c.dayKey === todayKey).slice(0, 4);
+                    if (todayCaps.length === 0) return <div style={{ fontSize: 11, color: "#A89ED8", fontStyle: "italic", textAlign: "center", padding: "8px 0" }}>No captures yet today</div>;
+                    return todayCaps.map(cap => (
+                      <div key={cap.id} style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
+                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#8B83D4", flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, color: "#3C3489", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cap.title}</span>
+                      </div>
+                    ));
+                  })()}
+                  <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid #DDD8F8", display: "flex", gap: 12 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      <span style={{ fontSize: 16, fontWeight: 700, color: "#3C3489", lineHeight: 1 }}>{todayEvents.filter(e => e.completed).length}</span>
+                      <span style={{ fontSize: 9, color: "#8B83D4", fontWeight: 500, letterSpacing: "0.04em", textTransform: "uppercase" }}>Done</span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      <span style={{ fontSize: 16, fontWeight: 700, color: "#3C3489", lineHeight: 1 }}>{todayEventCount}</span>
+                      <span style={{ fontSize: 9, color: "#8B83D4", fontWeight: 500, letterSpacing: "0.04em", textTransform: "uppercase" }}>Events</span>
+                    </div>
                     {weather && (
-                      <>
-                        <div style={{ width: 1, height: 10, background: "#B6DFB0", opacity: 0.6, flexShrink: 0 }} />
-                        <span style={{ fontSize: 11, flexShrink: 0 }}>{weather.emoji}</span>
-                        <span style={{ fontSize: 11, fontWeight: 500, color: "#3A8733", opacity: 0.85, whiteSpace: "nowrap" }}>
-                          {weather.temp}°C
-                        </span>
-                        {weather.city && (
-                          <>
-                            <div style={{ width: 1, height: 10, background: "#B6DFB0", opacity: 0.6, flexShrink: 0 }} />
-                            <span style={{ fontSize: 10, fontWeight: 500, color: "#3A8733", opacity: 0.65, maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {weather.city}
-                            </span>
-                          </>
-                        )}
-                      </>
+                      <div style={{ marginLeft: "auto", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
+                        <span style={{ fontSize: 14, lineHeight: 1 }}>{weather.emoji}</span>
+                        <span style={{ fontSize: 9, color: "#8B83D4", fontWeight: 500 }}>{weather.temp}°C</span>
+                      </div>
                     )}
                   </div>
                 </div>
-              ) : (
-                <div>
-                  <p style={{ fontSize: 14, fontWeight: 600, fontFamily: "'Lora', Georgia, serif", color: "#1D5C17", lineHeight: 1.2 }}>{format(selectedDate, "EEEE, MMMM d")}</p>
-                  <p style={{ fontSize: 11, color: "#3A8733", marginTop: 2, fontWeight: 400, fontFamily: "'Lora', Georgia, serif" }}>{format(selectedDate, "yyyy")}</p>
-                </div>
-              )}
+              </div>
+
+              {/* ── Backpack panel (inline) ── */}
+              <div style={{ marginTop: 8 }}>
+                <Backpack
+                  selectedDayKey={selectedDayKey}
+                  dayEvents={events.filter((e) => e.date === selectedDayKey)}
+                  onAttachToEvent={handleAttachToEvent}
+                  onCreateEventFromItem={handleCreateEventFromItem}
+                />
+              </div>
             </div>
 
-            <button
-              onClick={nextDay}
-              style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(255,255,255,0.55)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#3A8733", fontSize: 18, flexShrink: 0, lineHeight: 1 }}
-            >›</button>
-          </div>
-
-          {!isViewingToday && (
-            <button
-              onClick={() => setSelectedDate(today)}
-              style={{ display: "block", margin: "6px auto 0", fontSize: 11, color: "#9B91E0", background: "none", border: "none", cursor: "pointer", fontWeight: 500 }}
-            >
-              ↩ back to today
-            </button>
-          )}
-        </div>
-
-        {/* Input */}
-        <div style={{ padding: "0 24px" }}>
-          <TaskComposer weekDates={weekDates} events={events} tags={tags} onCommit={handleCommit} prefill={composerPrefill} />
-        </div>
-
-        {/* Backpack */}
-        <div className="flex-1 overflow-hidden" style={{ padding: "0 24px", marginTop: 24 }}>
-          <Backpack
-            selectedDayKey={selectedDayKey}
-            dayEvents={events.filter((e) => e.date === selectedDayKey)}
-            onAttachToEvent={handleAttachToEvent}
-            onCreateEventFromItem={handleCreateEventFromItem}
-          />
-        </div>
-
-        {/* Footer — export / import */}
-        <div style={{ padding: "12px 24px 16px", display: "flex", gap: 8 }}>
-          <button
-            onClick={() => {
-              const payload = {
-                version: 1,
-                exportedAt: new Date().toISOString(),
-                horizon_events: localStorage.getItem("horizon_events") ?? "[]",
-                horizon_backpack: localStorage.getItem("horizon_backpack") ?? "[]",
-              };
-              const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `horizon-backup-${format(new Date(), "yyyy-MM-dd")}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
-              showToast("Data exported");
-            }}
-            style={{
-              flex: 1, borderRadius: 14, background: "#EEEDFE",
-              border: "1px solid #C8BEF5", padding: "8px 0",
-              fontSize: 12, fontWeight: 600, color: "#3C3489",
-              cursor: "pointer", display: "flex", alignItems: "center",
-              justifyContent: "center", gap: 6,
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-              <path d="M6.5 1v7M3.5 5.5l3 3 3-3M1.5 10h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            Export
-          </button>
-
-          <label
-            style={{
-              flex: 1, borderRadius: 14, background: "#F0F0F0",
-              border: "1px solid #DEDAD4", padding: "8px 0",
-              fontSize: 12, fontWeight: 600, color: "#555",
-              cursor: "pointer", display: "flex", alignItems: "center",
-              justifyContent: "center", gap: 6,
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-              <path d="M6.5 9V2M3.5 4.5l3-3 3 3M1.5 10h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            Import
-            <input
-              type="file"
-              accept=".json"
-              style={{ display: "none" }}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                  try {
-                    const data = JSON.parse(ev.target?.result as string);
-                    if (data.horizon_events) localStorage.setItem("horizon_events", data.horizon_events);
-                    if (data.horizon_backpack) localStorage.setItem("horizon_backpack", data.horizon_backpack);
-                    showToast("Data imported — reloading…");
-                    setTimeout(() => window.location.reload(), 1200);
-                  } catch {
-                    showToast("Invalid backup file");
-                  }
-                };
-                reader.readAsText(file);
-                e.target.value = "";
-              }}
-            />
-          </label>
-        </div>
+            {/* ── Bottom: Profile + Settings + Export/Import ── */}
+            <div style={{ flexShrink: 0, padding: "8px 14px 16px", borderTop: "1px solid #EDE9E4" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, padding: "6px 8px", borderRadius: 10, cursor: "pointer" }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "#F3F0EC"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg, #C8C3F0, #7B73D6)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <User size={13} style={{ color: "#fff" }} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#3A3630" }}>Profile</span>
+                </div>
+                <button onClick={() => setSettingsOpen(true)} title="Settings"
+                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 10, border: "none", background: "transparent", color: "#6B6460", cursor: "pointer", fontSize: 12, fontWeight: 500, transition: "all 0.13s" }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "#F3F0EC"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  <Settings size={14} strokeWidth={1.8} style={{ color: "#9B9590" }} />
+                  Settings
+                </button>
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  onClick={() => {
+                    const payload = { version: 1, exportedAt: new Date().toISOString(), horizon_events: localStorage.getItem("horizon_events") ?? "[]", horizon_backpack: localStorage.getItem("horizon_backpack") ?? "[]" };
+                    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href = url; a.download = `horizon-backup-${format(new Date(), "yyyy-MM-dd")}.json`; a.click(); URL.revokeObjectURL(url);
+                    showToast("Data exported");
+                  }}
+                  style={{ flex: 1, borderRadius: 10, background: "#EEEDFE", border: "1px solid #C8BEF5", padding: "7px 0", fontSize: 11, fontWeight: 600, color: "#3C3489", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "#E0DDFB"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "#EEEDFE"; }}
+                >
+                  <svg width="11" height="11" viewBox="0 0 13 13" fill="none"><path d="M6.5 1v7M3.5 5.5l3 3 3-3M1.5 10h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  Export
+                </button>
+                <label
+                  style={{ flex: 1, borderRadius: 10, background: "#F2EFE9", border: "1px solid #E2DDD6", padding: "7px 0", fontSize: 11, fontWeight: 600, color: "#6B6460", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#EAE6DE"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#F2EFE9"; }}
+                >
+                  <svg width="11" height="11" viewBox="0 0 13 13" fill="none"><path d="M6.5 9V2M3.5 4.5l3-3 3 3M1.5 10h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  Import
+                  <input type="file" accept=".json" style={{ display: "none" }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]; if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        try {
+                          const data = JSON.parse(ev.target?.result as string);
+                          if (data.horizon_events) localStorage.setItem("horizon_events", data.horizon_events);
+                          if (data.horizon_backpack) localStorage.setItem("horizon_backpack", data.horizon_backpack);
+                          showToast("Data imported — reloading…");
+                          setTimeout(() => window.location.reload(), 1200);
+                        } catch { showToast("Invalid backup file"); }
+                      };
+                      reader.readAsText(file); e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* ── RESIZE HANDLE / EXPAND BUTTON (desktop only) ── */}
-      {!isMobile && (leftCollapsed ? (
-        <div
-          title="Sidebar shortcuts (click to open)"
-          aria-label="Sidebar shortcuts"
-          onClick={() => setLeftCollapsed(false)}
-          style={{
-            width: 54,
-            flexShrink: 0,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "space-between",
-            background: "#F3EFE8",
-            border: "1px solid #E1DAD0",
-            color: "#5B5247",
-            fontSize: 12,
-            borderRadius: 14,
-            transition: "all 0.18s ease",
-            boxShadow: "0 2px 10px rgba(91,82,71,0.10)",
-            marginLeft: 2,
-            marginRight: 2,
-            padding: "8px 0",
-            gap: 12,
-            cursor: "pointer",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.boxShadow = "0 5px 14px rgba(91,82,71,0.16)";
-            e.currentTarget.style.background = "#EFE9E0";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.boxShadow = "0 2px 8px rgba(91,82,71,0.10)";
-            e.currentTarget.style.background = "#F3EFE8";
-          }}
-        >
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setLeftCollapsed(false);
-            }}
-            title="Keep sidebar open"
-            aria-label="Keep sidebar open"
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 10,
-              border: "1px solid #DDD4C8",
-              background: "#FBF8F3",
-              color: "#6B6054",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 15,
-              fontWeight: 700,
-            }}
-          >
-            ›
-          </button>
-
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, opacity: 0.9 }}>
-            <span title="Calendar view and week navigation" aria-label="Calendar view and week navigation" style={{ display: "inline-flex" }}>
-              <CalendarRange size={16} />
-            </span>
-            <span title="Quick capture and backpack inbox" aria-label="Quick capture and backpack inbox" style={{ display: "inline-flex" }}>
-              <Sparkles size={16} />
-            </span>
-            <span title="Today's date and daily context panel" aria-label="Today's date and daily context panel" style={{ display: "inline-flex" }}>
-              <CalendarDays size={16} />
-            </span>
-          </div>
-
-          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", color: "#7A7065" }}>SIDEBAR</span>
-        </div>
-      ) : (
+      {/* ── RESIZE HANDLE (desktop only, shown when sidebar is pinned open) ── */}
+      {!isMobile && !leftCollapsed && (
         <div onMouseDown={handleResizeMouseDown} style={{ width: 16, flexShrink: 0, cursor: "col-resize", display: "flex", alignItems: "center", justifyContent: "center", userSelect: "none" }}>
           <div
             style={{ width: 3, height: 40, borderRadius: 2, background: "rgba(0,0,0,0.10)", transition: "background 0.15s" }}
@@ -940,7 +914,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
             onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(0,0,0,0.10)")}
           />
         </div>
-      ))}
+      )}
 
       {/* ── RIGHT PANEL ── */}
       <div
@@ -952,11 +926,11 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                 flex: 1,
                 minHeight: 0,
                 width: "100%",
-                background: "#F4F1ED",
+                background: "#FAFAF8",
                 borderRadius: 16,
                 boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
               }
-            : { background: "#F4F1ED", borderRadius: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", minWidth: minRightWidth, flex: 1 }
+            : { background: "#FAFAF8", borderRadius: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", minWidth: minRightWidth, flex: 1 }
         }
       >
         {/* Header */}
