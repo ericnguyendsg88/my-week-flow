@@ -1050,6 +1050,7 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
       </motion.div>
 
       {detailPanel}
+      {showShare && <ShareInviteModal event={event} onClose={() => setShowShare(false)} />}
     </>
   );
 }
