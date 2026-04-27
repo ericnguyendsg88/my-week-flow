@@ -785,13 +785,13 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
             }}
             style={{
               display: "flex", alignItems: "center", gap: 4,
-              background: dayTypeDef ? "rgba(0,0,0,0.07)" : "rgba(0,0,0,0.05)",
-              border: "none",
-              borderRadius: 20,
+              background: dayTypeDef ? dayTypeDef.bg : "rgba(0,0,0,0.04)",
+              border: dayTypeDef ? `1px solid ${dayTypeDef.border}` : "1px solid rgba(0,0,0,0.08)",
+              borderRadius: 6,
               padding: "2px 7px 2px 5px",
               cursor: "pointer",
               fontSize: 11, fontWeight: 600,
-              color: subColor,
+              color: dayTypeDef ? dayTypeDef.text : subColor,
             }}
           >
             <span style={{ fontSize: 12, lineHeight: 1 }}>{dayTypeDef ? dayTypeDef.emoji : "+"}</span>

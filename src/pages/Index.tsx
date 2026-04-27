@@ -982,13 +982,22 @@ const HorizonApp = ({ userId }: { userId: string }) => {
               </div>
             )}
 
-            {(viewMode === "week") && (
+            {(viewMode === "week" || viewMode === "focus") && (
               <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                <button onClick={handleWeekBack}
+                <button
+                  onClick={viewMode === "focus"
+                    ? () => { const d = addDays(focusDate, -1); setFocusDate(d); setSelectedDate(d); }
+                    : handleWeekBack}
                   style={{ background: "#fff", border: "1px solid #EAEAEA", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#3C3489" }}>←</button>
-                <button onClick={handleWeekToday}
+                <button
+                  onClick={viewMode === "focus"
+                    ? () => { setFocusDate(today); setSelectedDate(today); }
+                    : handleWeekToday}
                   style={{ background: "#fff", border: "1px solid #EAEAEA", borderRadius: 16, padding: "0 12px", height: 32, cursor: "pointer", fontSize: 12, fontWeight: 500, color: "#3C3489" }}>Today</button>
-                <button onClick={handleWeekForward}
+                <button
+                  onClick={viewMode === "focus"
+                    ? () => { const d = addDays(focusDate, 1); setFocusDate(d); setSelectedDate(d); }
+                    : handleWeekForward}
                   style={{ background: "#fff", border: "1px solid #EAEAEA", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#3C3489" }}>→</button>
               </div>
             )}

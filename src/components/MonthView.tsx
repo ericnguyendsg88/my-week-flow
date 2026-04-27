@@ -293,7 +293,7 @@ function DayCell({ day, dayEvents, isToday: todayDay, isCurrentMonth, isLast, is
               key={ev.id}
               style={{
                 width: "100%",
-                borderRadius: 4,
+                borderRadius: 20,
                 overflow: "hidden",
                 display: "flex",
                 alignItems: "stretch",
