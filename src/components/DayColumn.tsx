@@ -66,9 +66,9 @@ interface Props {
   privacyMode?: boolean;
 }
 
-const DAY_START = 6 * 60;   // 6am
+const DAY_START = 0;         // 12am
 const DAY_END   = 24 * 60;  // midnight
-const DAY_HOURS = (DAY_END - DAY_START) / 60; // 18
+const DAY_HOURS = (DAY_END - DAY_START) / 60; // 24
 
 const timeToY = (mins: number) => Math.max(0, mins - DAY_START);
 const yToTime = (y: number) => y + DAY_START;
@@ -934,9 +934,9 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
         {/* Evening tint band */}
         <div style={{
           position: "absolute",
-          top: timeToY(18 * 60),
+          top: timeToY(17 * 60),
           left: 0, right: 0,
-          height: timeToY(24 * 60) - timeToY(18 * 60),
+          height: timeToY(24 * 60) - timeToY(17 * 60),
           background: "rgba(206,203,246,0.06)",
           borderRadius: 8,
           pointerEvents: "none",
@@ -946,7 +946,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
         {/* Section headers */}
         <AbsoluteSectionHeader title="MORNING"   y={timeToY(6 * 60)} />
         <AbsoluteSectionHeader title="AFTERNOON" y={timeToY(12 * 60)} />
-        <AbsoluteSectionHeader title="EVENING"   y={timeToY(18 * 60)} />
+        <AbsoluteSectionHeader title="EVENING"   y={timeToY(17 * 60)} />
 
         {/* Ghost block while drag-creating / panel open */}
         {ghost && (
@@ -1100,7 +1100,6 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
                 paddingLeft: layout.column > 0 ? 2 : 0,
                 paddingRight: layout.column < layout.maxColumns - 1 ? 2 : 0,
                 boxSizing: "border-box",
-                overflow: "hidden",
               }}
             >
               <EventBubble

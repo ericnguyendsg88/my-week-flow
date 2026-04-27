@@ -860,7 +860,7 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
           userSelect: "none",
           height: "100%",
           boxSizing: "border-box",
-          overflow: "hidden",
+          overflow: "visible",
           outline: showDetail ? `2px solid ${colors.text}44` : "none",
           outlineOffset: 2,
           display: "flex",

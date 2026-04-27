@@ -1458,8 +1458,8 @@ function WeekGrid({ weekDates, events, tags, allCaptures, onMark, onDelete, onRe
   selectedDayKey?: string;
   onDayClick?: (date: Date) => void;
 }) {
-  const START_HOUR = 7;
-  const END_HOUR = 22;
+  const START_HOUR = 0;
+  const END_HOUR = 24;
 
   return (
     <div className="flex w-full min-h-0 flex-1 overflow-auto scrollbar-hidden">
@@ -1497,14 +1497,19 @@ function WeekGrid({ weekDates, events, tags, allCaptures, onMark, onDelete, onRe
 
 /* ── Time Gutter ── */
 const GUTTER_ANCHORS: Record<number, { label: string; sub?: string; accent?: boolean }> = {
-  7:  { label: "7 AM",  sub: "morning" },
-  9:  { label: "9 AM" },
+  0:  { label: "12 AM", sub: "midnight" },
+  2:  { label: "2 AM" },
+  4:  { label: "4 AM" },
+  6:  { label: "6 AM",  sub: "morning" },
+  8:  { label: "8 AM" },
+  10: { label: "10 AM" },
   12: { label: "noon",  sub: "midday",  accent: true },
-  15: { label: "3 PM" },
+  14: { label: "2 PM" },
+  16: { label: "4 PM" },
   17: { label: "5 PM",  sub: "evening" },
   19: { label: "7 PM" },
   21: { label: "9 PM" },
-  22: { label: "10 PM" },
+  23: { label: "11 PM" },
 };
 
 function TimeGutter({ startHour, endHour }: { startHour: number; endHour: number }) {
