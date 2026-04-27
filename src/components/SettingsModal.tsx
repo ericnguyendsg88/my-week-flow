@@ -201,7 +201,7 @@ function TagsTab({ tags, onChange }: { tags: Tag[]; onChange: (t: Tag[]) => void
                   display: "flex", alignItems: "center", justifyContent: "center",
                   cursor: "pointer",
                 }}
-                onClick={() => setEditing(isEditing ? null : tag.id)}
+                onMouseDown={e => { e.preventDefault(); setEditing(isEditing ? null : tag.id); }}
                 title="Click to edit"
               >
                 <span style={{ fontSize: 10, fontWeight: 700, color: c.text }}>
@@ -239,12 +239,12 @@ function TagsTab({ tags, onChange }: { tags: Tag[]; onChange: (t: Tag[]) => void
                     return (
                       <button
                         key={col}
-                        onClick={() => updateColor(tag.id, col)}
+                        onMouseDown={e => { e.preventDefault(); updateColor(tag.id, col); }}
                         title={col}
                         style={{
                           width: 20, height: 20, borderRadius: "50%", border: "none",
                           background: ch.bg,
-                          outline: tag.color === col ? `2.5px solid ${ch.text}` : "2px solid transparent",
+                          outline: tag.color === col ? `2.5px solid ${ch.text}` : `1.5px solid ${ch.border}`,
                           outlineOffset: 1,
                           cursor: "pointer",
                           transition: "outline 0.1s",

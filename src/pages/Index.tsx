@@ -1174,7 +1174,8 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                 <MonthView
                   events={events}
                   tags={tags}
-                  onDayClick={(date) => { setSelectedDate(date); setViewMode("week"); setCurrentWeekStart(startOfWeek(date, { weekStartsOn: 1 })); setWeekWindowMode("calendar"); }}
+                  onDayClick={(date) => { setSelectedDate(date); }}
+                  onDayNavigate={(date) => { setSelectedDate(date); setFocusDate(date); setViewMode("focus"); }}
                 />
               </motion.div>
             ) : (

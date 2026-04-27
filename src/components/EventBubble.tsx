@@ -868,47 +868,18 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
           boxShadow: "none",
         }}
       >
-        {/* In-progress state: left border + "happening now" label with pulsing dot */}
+        {/* In-progress state: left border only */}
         {isInProgress && !isCompleted && !isSkipped && (
-          <>
-            <div style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              bottom: 0,
-              width: 3,
-              background: colors.text,
-              borderRadius: "12px 0 0 12px",
-              zIndex: 1,
-            }} />
-            <div style={{
-              position: "absolute",
-              top: 4,
-              left: 8,
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              zIndex: 2,
-            }}>
-              <span style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: colors.light,
-                boxShadow: `0 0 0 3px ${colors.light}`,
-                animation: "pulse 1.5s ease-in-out infinite",
-              }} />
-              <span style={{
-                fontSize: 9,
-                fontWeight: 500,
-                color: colors.text,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-              }}>
-                happening now
-              </span>
-            </div>
-          </>
+          <div style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            bottom: 0,
+            width: 3,
+            background: colors.text,
+            borderRadius: "12px 0 0 12px",
+            zIndex: 1,
+          }} />
         )}
 
         {/* Left accent bar for other states (not in-progress) */}

@@ -11,6 +11,7 @@ interface Props {
   events: CalEvent[];
   tags?: never[];
   onDayClick?: (date: Date) => void;
+  onDayNavigate?: (date: Date) => void;
 }
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -36,7 +37,7 @@ function isHappeningNow(ev: CalEvent): boolean {
   return now >= ev.start && now < ev.start + ev.duration;
 }
 
-export function MonthView({ events, onDayClick }: Props) {
+export function MonthView({ events, onDayClick, onDayNavigate }: Props) {
   const today = startOfDay(new Date());
   const scrollRef = useRef<HTMLDivElement>(null);
   const todayRowRef = useRef<HTMLDivElement>(null);
@@ -202,8 +203,14 @@ export function MonthView({ events, onDayClick }: Props) {
                       isSelected={selectedDay === dayKey}
                       onClick={() => {
                         setSelectedWeek(null);
-                        setSelectedDay(v => v === dayKey ? null : dayKey);
-                        onDayClick?.(day);
+                        if (selectedDay === dayKey) {
+                          // second click → navigate
+                          onDayNavigate?.(day);
+                        } else {
+                          // first click → select
+                          setSelectedDay(dayKey);
+                          onDayClick?.(day);
+                        }
                       }}
                     />
                   );

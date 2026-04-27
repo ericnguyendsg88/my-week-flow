@@ -882,13 +882,15 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
           outlineOffset: 2,
           borderRadius: 8,
           transition: "outline 0.1s",
+          overflow: "hidden",
         }}
       >
         {/* Hour grid lines & markers */}
         {Array.from({ length: DAY_HOURS + 1 }, (_, i) => i).map((i) => {
           const hour = DAY_START / 60 + i;
-          const isPM = hour >= 12;
-          const hour12 = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+          const h24 = hour % 24; // midnight wraps to 0
+          const isPM = h24 >= 12;
+          const hour12 = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
           return (
             <div key={`hr-${i}`} style={{ position: "absolute", top: i * 60, left: 0, right: 0, pointerEvents: "none", zIndex: 18 }}>
               {/* Hour line */}
@@ -992,7 +994,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
                   position: "absolute",
                   top: timeToY(ev.start),
                   left: 0, right: 0,
-                  height: Math.max(ev.duration, 30),
+                  height: Math.max(Math.min(ev.duration, DAY_END - ev.start), 30),
                   borderRadius: 10,
                   background: "linear-gradient(90deg, #E5E2DC 0%, #EDEBE7 40%, #E5E2DC 100%)",
                   backgroundSize: "200% 100%",
@@ -1090,7 +1092,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
                 top: timeToY(displayStart),
                 left: `${leftOffset}%`,
                 width: `${layout.width}%`,
-                height: Math.max(displayDuration, 30),
+                height: Math.max(Math.min(displayDuration, DAY_END - displayStart), 30),
                 zIndex: isResizing ? 15 : isMoving ? 16 : 10,
                 transition: (isResizing || isMoving) ? "none" : undefined,
                 cursor: isMoving ? "grabbing" : "grab",
