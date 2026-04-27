@@ -146,6 +146,7 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
   const tag = tags ? getTag(tags, event.tagId) : undefined;
   const colors = tagColors(tag?.id ?? event.tagId);
   const [showDetail, setShowDetail] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const [panelPos, setPanelPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const bubbleRef = useRef<HTMLDivElement>(null);
 
