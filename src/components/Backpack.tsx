@@ -18,10 +18,10 @@ const KINDS: {
   text: string;
   needsUrl?: boolean;
 }[] = [
-  { id: "thought", label: "thought", icon: Lightbulb,  bg: "#F1EFE8", text: "#444441" },
-  { id: "link",    label: "link",    icon: Link2,       bg: "#E8EEF8", text: "#2A4A80", needsUrl: true },
-  { id: "ref",     label: "ref",     icon: Bookmark,    bg: "#F5EEE0", text: "#6B4A1A" },
-  { id: "task",    label: "task",    icon: Square,      bg: "#EDF3EC", text: "#2A5028" },
+  { id: "thought", label: "thought", icon: Lightbulb,  bg: "#EDE9E0", text: "#6B5E3A" },
+  { id: "link",    label: "link",    icon: Link2,       bg: "#D8E8F8", text: "#2A4A80", needsUrl: true },
+  { id: "ref",     label: "ref",     icon: Bookmark,    bg: "#F0E0C0", text: "#6B4A1A" },
+  { id: "task",    label: "task",    icon: Square,      bg: "#E0F0DE", text: "#2A5028" },
 ];
 
 function kindMeta(k: CaptureKind) {
@@ -310,7 +310,7 @@ function TaskCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
         </button>
       </div>
       <div style={{ marginLeft: 24 }}>
-        <CardActions onPlace={onPlace} onRemove={onRemove} accent={{ bg: "#F1EFE8", text: "#444441" }} />
+        <CardActions onPlace={onPlace} onRemove={onRemove} accent={{ bg: "#E0F0DE", text: "#2A5028" }} />
       </div>
     </motion.div>
   );
@@ -329,14 +329,14 @@ function RefCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e: 
     <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: item.placed ? 0.4 : 1, y: 0 }} exit={{ opacity: 0, x: -8 }}
       draggable={!editing}
       onDragStart={e => { e.dataTransfer.setData("text/capture-json", JSON.stringify(item)); e.dataTransfer.effectAllowed = "copy"; }}
-      style={{ borderRadius: 10, background: editing ? "#FFFDF8" : "#FAFAFA", border: editing ? "1px solid #C8C4BE" : "0.5px solid #E5E4E0", marginBottom: 5, padding: "8px 10px", display: "flex", gap: 8, cursor: editing ? "default" : "grab" }}
+      style={{ borderRadius: 10, background: editing ? "#FDF7EE" : "#FBF5EB", border: editing ? "1px solid #D4B898" : "0.5px solid #E8D8BC", marginBottom: 5, padding: "8px 10px", display: "flex", gap: 8, cursor: editing ? "default" : "grab" }}
     >
-      <div style={{ width: 16, height: 16, borderRadius: 4, background: "#F1EFE8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        <Bookmark size={9} color="#5F5E5A" strokeWidth={2} />
+      <div style={{ width: 16, height: 16, borderRadius: 4, background: "#F0E0C0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <Bookmark size={9} color="#6B4A1A" strokeWidth={2} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 3 }}>
-          <span style={{ fontSize: 9, fontWeight: 500, color: "#5F5E5A", textTransform: "uppercase", letterSpacing: "0.07em" }}>ref</span>
+          <span style={{ fontSize: 9, fontWeight: 500, color: "#6B4A1A", textTransform: "uppercase", letterSpacing: "0.07em" }}>ref</span>
           <span style={{ marginLeft: "auto" }}><Timestamp ts={item.createdAt} color="#A8A4A0" /></span>
           <button onClick={onRemove} style={{ background: "none", border: "none", cursor: "pointer", padding: 1, color: "#D3D1C7" }}><X size={9} /></button>
         </div>
@@ -355,11 +355,11 @@ function RefCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e: 
           </p>
         )}
         {item.url && (
-          <p style={{ fontSize: 10, color: "#5F5E5A", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.75 }}>
+          <p style={{ fontSize: 10, color: "#6B4A1A", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.75 }}>
             {item.url}
           </p>
         )}
-        <CardActions onPlace={onPlace} onRemove={onRemove} accent={{ bg: "#F1EFE8", text: "#444441" }} />
+        <CardActions onPlace={onPlace} onRemove={onRemove} accent={{ bg: "#F0E0C0", text: "#6B4A1A" }} />
       </div>
     </motion.div>
   );
@@ -571,8 +571,8 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
       onDragStart={e => { e.dataTransfer.setData("text/capture-json", JSON.stringify(item)); e.dataTransfer.effectAllowed = "copy"; }}
       style={{
         borderRadius: 10,
-        background: "#FAFAFA",
-        border: "0.5px solid #E5E4E0",
+        background: "#EEF3FC",
+        border: "0.5px solid #C8D8F0",
         marginBottom: 5,
         padding: "8px 10px",
         cursor: "grab",
@@ -580,10 +580,10 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
     >
       {/* Header row */}
       <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
-        <div style={{ width: 16, height: 16, borderRadius: 4, background: "#F1EFE8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <Link2 size={9} color="#5F5E5A" strokeWidth={2} />
+        <div style={{ width: 16, height: 16, borderRadius: 4, background: "#D8E8F8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Link2 size={9} color="#2A4A80" strokeWidth={2} />
         </div>
-        <span style={{ fontSize: 9, fontWeight: 500, color: "#5F5E5A", textTransform: "uppercase", letterSpacing: "0.06em", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span style={{ fontSize: 9, fontWeight: 500, color: "#2A4A80", textTransform: "uppercase", letterSpacing: "0.06em", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {item.ogSite || hostname || "link"}
         </span>
         <Timestamp ts={item.createdAt} color="#A8A4A0" />
@@ -596,7 +596,9 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
       ) : (
         <p
           onClick={() => item.url && window.open(item.url, "_blank")}
-          style={{ fontSize: 13, fontWeight: 500, fontFamily: "'Lora', Georgia, serif", color: "#444441", lineHeight: 1.4, wordBreak: "break-word", cursor: item.url ? "pointer" : "default", marginBottom: 6 }}
+          style={{ fontSize: 13, fontWeight: 500, fontFamily: "'Lora', Georgia, serif", color: "#444441", lineHeight: 1.4, wordBreak: "break-word", cursor: item.url ? "pointer" : "default", marginBottom: 6,
+            display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+          title={displayTitle ?? ""}
         >
           {displayTitle}
         </p>
@@ -604,7 +606,7 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
 
       {/* URL line */}
       {item.url && displayTitle !== item.url && (
-        <p style={{ fontSize: 10, color: "#5F5E5A", marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.75 }}>
+        <p style={{ fontSize: 10, color: "#2A4A80", marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.75 }}>
           {item.url}
         </p>
       )}
@@ -618,13 +620,13 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
             onChange={e => setNoteDraft(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveNote(); } if (e.key === "Escape") { setNoteOpen(false); } }}
             placeholder="Add a note…"
-            rows={2}
+            rows={3}
             style={{
               width: "100%", boxSizing: "border-box",
-              fontSize: 11, color: "#444441", background: "#F5F3EE",
-              border: "1px solid #D8D5CE", borderRadius: 6,
-              padding: "5px 7px", resize: "none", outline: "none",
-              fontFamily: "'Lora', Georgia, serif", lineHeight: 1.5,
+              fontSize: 13, color: "#444441", background: "#E8F0F8",
+              border: "1px solid #C8D8F0", borderRadius: 6,
+              padding: "6px 8px", resize: "none", outline: "none",
+              fontFamily: "'Lora', Georgia, serif", lineHeight: 1.55,
             }}
           />
           <div style={{ display: "flex", gap: 4, marginTop: 3 }}>
@@ -642,7 +644,7 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
         <p
           onClick={openNote}
           title="Click to edit note"
-          style={{ fontSize: 11, color: "#666", fontFamily: "'Lora', Georgia, serif", lineHeight: 1.45, marginBottom: 6, cursor: "text", borderLeft: "2px solid #D8D5CE", paddingLeft: 6 }}
+          style={{ fontSize: 13, color: "#555", fontFamily: "'Lora', Georgia, serif", lineHeight: 1.55, marginBottom: 6, cursor: "text", borderLeft: "2px solid #C8D8F0", paddingLeft: 7 }}
         >
           {item.note}
         </p>
@@ -653,7 +655,7 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
         <button
           type="button"
           onClick={() => item.url && window.open(item.url, "_blank")}
-          style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 9, fontWeight: 500, color: "#444441", background: "#F1EFE8", border: "none", borderRadius: 5, padding: "2px 6px", cursor: "pointer" }}
+          style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 9, fontWeight: 500, color: "#2A4A80", background: "#D8E8F8", border: "none", borderRadius: 5, padding: "2px 6px", cursor: "pointer" }}
         >
           open
         </button>
@@ -661,7 +663,7 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
           <button
             type="button"
             onClick={openNote}
-            style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 9, fontWeight: 500, color: item.note ? "#3C3489" : "#888", background: item.note ? "#EEEDFE" : "#F1EFE8", border: "none", borderRadius: 5, padding: "2px 6px", cursor: "pointer" }}
+            style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 9, fontWeight: 500, color: item.note ? "#3C3489" : "#2A4A80", background: item.note ? "#EEEDFE" : "#D8E8F8", border: "none", borderRadius: 5, padding: "2px 6px", cursor: "pointer" }}
           >
             {item.note ? "note ✎" : "+ note"}
           </button>
@@ -669,7 +671,7 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
         <button
           type="button"
           onClick={onPlace}
-          style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 9, fontWeight: 500, color: "#444441", background: "#F1EFE8", border: "none", borderRadius: 5, padding: "2px 6px", cursor: "pointer" }}
+          style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 9, fontWeight: 500, color: "#2A4A80", background: "#D8E8F8", border: "none", borderRadius: 5, padding: "2px 6px", cursor: "pointer" }}
         >
           place →
         </button>
@@ -687,6 +689,7 @@ interface Props {
 
 export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCreateEventFromItem }: Props) {
   const allItems = useCaptures(selectedDayKey);
+  const [kindFilter, setKindFilter] = useState<CaptureKind | "all">("all");
 
   // Keep a ref always pointing to the current dayKey so async closures never capture stale values
   const selectedDayKeyRef = useRef(selectedDayKey);
@@ -706,6 +709,7 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
     setDraftTitle("");
     setDraftUrl("");
     setPlacingItem(null);
+    setKindFilter("all");
   }, [selectedDayKey]);
 
   const committingRef = useRef(false);
@@ -911,14 +915,45 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
       })()}
 
       {/* Unified item list */}
-      <div style={{ flex: 1, overflowY: "auto" }} className="scrollbar-hidden">
+      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", minHeight: 0 }} className="scrollbar-hidden">
+        {/* Filter bar */}
+        {allItems.length > 0 && (
+          <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginBottom: 8, flexShrink: 0 }}>
+            {([
+              { id: "all" as const, label: "All" },
+              { id: "thought" as const, label: "Thoughts" },
+              { id: "task" as const, label: "Tasks" },
+              { id: "link" as const, label: "Links" },
+              { id: "ref" as const, label: "Refs" },
+            ] as { id: CaptureKind | "all"; label: string }[]).map(f => {
+              const count = f.id === "all" ? allItems.length : allItems.filter(i => i.kind === f.id).length;
+              if (f.id !== "all" && count === 0) return null;
+              const active = kindFilter === f.id;
+              return (
+                <button key={f.id} type="button" onClick={() => setKindFilter(f.id)}
+                  style={{
+                    fontSize: 10, fontWeight: active ? 700 : 500,
+                    padding: "3px 8px", borderRadius: 20,
+                    background: active ? "#3C3489" : "#F0EDE8",
+                    color: active ? "#fff" : "#6B5E3A",
+                    border: "none", cursor: "pointer",
+                    transition: "all 0.12s",
+                  }}
+                >
+                  {f.label}
+                  <span style={{ marginLeft: 3, opacity: active ? 0.75 : 0.5, fontSize: 9 }}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
         {allItems.length === 0 && (
           <div style={{ textAlign: "center", fontSize: 11, color: "hsl(var(--muted-foreground))", padding: "12px 0" }}>
             nothing in your backpack yet
           </div>
         )}
         <AnimatePresence initial={false}>
-          {allItems.map((item) => {
+          {allItems.filter(item => kindFilter === "all" || item.kind === kindFilter).map((item) => {
             // Rich link card
             if (item.kind === "link") {
               return (

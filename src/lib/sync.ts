@@ -200,8 +200,13 @@ function rowToCapture(r: DbCapture): CaptureItem {
 export async function pushCaptures(captures: CaptureItem[], userId: string) {
   if (!supabaseConfigured || captures.length === 0) return;
   const rows = captures.map((c) => captureToRow(c, userId));
-  const { error } = await supabase.from("captures").upsert(rows, { onConflict: "id" });
-  if (error) console.warn("[sync] pushCaptures:", error.message);
+  // Chunk into batches of 500 to stay within Supabase's default upsert row limit
+  const CHUNK = 500;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const batch = rows.slice(i, i + CHUNK);
+    const { error } = await supabase.from("captures").upsert(batch, { onConflict: "id" });
+    if (error) { console.warn("[sync] pushCaptures:", error.message); return; }
+  }
 }
 
 export async function deleteCapture(id: string) {
@@ -212,9 +217,23 @@ export async function deleteCapture(id: string) {
 
 export async function pullCaptures(userId: string): Promise<CaptureItem[] | null> {
   if (!supabaseConfigured) return null;
-  const { data, error } = await supabase.from("captures").select("*").eq("user_id", userId);
-  if (error) { console.warn("[sync] pullCaptures:", error.message); return null; }
-  return (data as DbCapture[]).map(rowToCapture);
+  // Paginate to bypass the default 1000-row limit
+  const PAGE = 1000;
+  let all: DbCapture[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("captures")
+      .select("*")
+      .eq("user_id", userId)
+      .range(from, from + PAGE - 1);
+    if (error) { console.warn("[sync] pullCaptures:", error.message); return null; }
+    if (!data || data.length === 0) break;
+    all = all.concat(data as DbCapture[]);
+    if (data.length < PAGE) break; // last page
+    from += PAGE;
+  }
+  return all.map(rowToCapture);
 }
 
 export function subscribeCaptures(
