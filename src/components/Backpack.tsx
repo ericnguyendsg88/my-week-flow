@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { format, isToday, parseISO } from "date-fns";
 import { Lightbulb, Link2, FileText, Bookmark, Square, ExternalLink, X, Calendar, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { CalEvent, CaptureItem, CaptureKind, MealType } from "@/types/event";
+import { CalEvent, CaptureItem, CaptureKind } from "@/types/event";
 import { useCaptures, addCapture, removeCapture, markCapturePlaced, patchCapture } from "@/lib/capture-store";
 import { minutesToLabel } from "@/lib/event-utils";
 import { fetchLinkPreview } from "@/lib/link-preview";
@@ -24,18 +24,6 @@ const KINDS: {
   { id: "ref",     label: "ref",     icon: Bookmark,    bg: "#F1EFE8", text: "#444441" },
   { id: "task",    label: "task",    icon: Square,      bg: "#F1EFE8", text: "#444441" },
 ];
-
-const MEALS: { type: MealType; emoji: string; label: string; placeholder: string }[] = [
-  { type: "breakfast", emoji: "🍳", label: "Breakfast", placeholder: "what did you have for breakfast?" },
-  { type: "lunch",     emoji: "🥗", label: "Lunch",     placeholder: "what did you have for lunch?" },
-  { type: "dinner",    emoji: "🍽️", label: "Dinner",    placeholder: "what did you have for dinner?" },
-];
-
-const MEAL_COLORS: Record<MealType, { bg: string; text: string }> = {
-  breakfast: { bg: "#F1EFE8", text: "#444441" },
-  lunch:     { bg: "#F1EFE8", text: "#444441" },
-  dinner:    { bg: "#F1EFE8", text: "#444441" },
-};
 
 function kindMeta(k: CaptureKind) {
   return KINDS.find((x) => x.id === k) ?? KINDS[0];
@@ -337,12 +325,15 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: item.placed ? 0.45 : 1, y: 0 }}
       exit={{ opacity: 0, x: -8 }}
+      draggable
+      onDragStart={e => { e.dataTransfer.setData("text/capture-json", JSON.stringify(item)); e.dataTransfer.effectAllowed = "copy"; }}
       style={{
         borderRadius: 10,
         background: "#FAFAFA",
         border: "0.5px solid #E5E4E0",
         marginBottom: 5,
         padding: "8px 10px",
+        cursor: "grab",
       }}
     >
       {/* Header row */}
@@ -416,20 +407,14 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
   const [draftUrl, setDraftUrl] = useState("");
   const draftTitleRef = useRef<HTMLTextAreaElement>(null);
 
-  const [addingMeal, setAddingMeal] = useState<MealType | null>(null);
-  const [mealText, setMealText] = useState("");
-  const mealInputRef = useRef<HTMLInputElement>(null);
-
   const [placingItem, setPlacingItem] = useState<CaptureItem | null>(null);
   const [placeAnchor, setPlaceAnchor] = useState({ x: 0, y: 0 });
 
   // Reset form whenever the selected day changes so items always go to the visible day
   useEffect(() => {
     setAdding(null);
-    setAddingMeal(null);
     setDraftTitle("");
     setDraftUrl("");
-    setMealText("");
     setPlacingItem(null);
   }, [selectedDayKey]);
 
@@ -471,20 +456,6 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
     if (/^https?:\/\//.test(val.trim()) && !draftUrl) {
       setDraftUrl(val.trim());
     }
-  }
-
-  function commitMeal() {
-    if (!addingMeal || !mealText.trim()) return;
-    addCapture({ kind: "meal", title: mealText.trim(), mealType: addingMeal, dayKey: selectedDayKeyRef.current });
-    setAddingMeal(null);
-    setMealText("");
-  }
-
-  function openMeal(type: MealType) {
-    setAdding(null);
-    setAddingMeal(type);
-    setMealText("");
-    setTimeout(() => mealInputRef.current?.focus(), 60);
   }
 
   function toggleDraftBold() {
@@ -550,167 +521,104 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
         );
       })()}
 
-      {/* Quick-add chips — captures */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 8 }}>
-        {KINDS.map((k) => {
-          const Icon = k.icon;
-          const active = adding === k.id;
-          return (
-            <button
-              key={k.id}
-              onClick={() => { setAdding(active ? null : k.id); setAddingMeal(null); setDraftTitle(""); setDraftUrl(""); }}
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                borderRadius: 20, padding: "5px 10px",
-                fontSize: 10, fontWeight: 500,
-                background: active ? k.text : k.bg,
-                color: active ? "#fff" : k.text,
-                border: active ? "none" : `0.5px solid ${k.text}`,
-                cursor: "pointer", transition: "all 0.15s",
-                letterSpacing: "0.01em",
+      {/* ── Always-visible composer ── */}
+      {(() => {
+        const detectedKind: CaptureKind = /^https?:\/\//.test(draftTitle.trim()) ? "link" : (adding ?? "thought");
+        const activeKind = adding ?? detectedKind;
+        const KindIcon = kindMeta(activeKind).icon;
+        const [kindPickerOpen, setKindPickerOpen] = useState(false);
+        const hasContent = draftTitle.trim().length > 0;
+
+        return (
+          <div style={{ borderRadius: 12, background: "#F7F5F2", border: "1px solid #E8E5E0", marginBottom: 10, overflow: "hidden" }}>
+            <Textarea
+              ref={draftTitleRef}
+              value={draftTitle}
+              onChange={(e) => {
+                const val = e.target.value;
+                setDraftTitle(val);
+                // Auto-switch to link kind when a URL is pasted
+                if (/^https?:\/\//.test(val.trim())) {
+                  setAdding("link");
+                  if (!draftUrl) setDraftUrl(val.trim());
+                } else if (adding === "link" && !/^https?:\/\//.test(val.trim()) && val.trim() !== "") {
+                  // typed label for a link — keep link kind but don't override
+                }
               }}
-            >
-              <Icon size={10} color={active ? "#fff" : k.text} strokeWidth={2} />
-              {k.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Quick-add chips — meals */}
-      <div style={{ display: "flex", gap: 7, marginBottom: 10, flexWrap: "wrap" }}>
-        {MEALS.map((m) => {
-          const logged = allItems.find((i) => i.kind === "meal" && i.mealType === m.type);
-          const active = addingMeal === m.type;
-          return (
-            <button
-              key={m.type}
-              onClick={() => active ? setAddingMeal(null) : openMeal(m.type)}
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                borderRadius: 20, padding: "5px 10px",
-                fontSize: 10, fontWeight: 500,
-                background: active ? "#444441" : logged ? "#F1EFE8" : "#F1EFE8",
-                color: active ? "#fff" : logged ? "#444441" : "#888580",
-                border: logged && !active ? "0.5px solid #444441" : active ? "none" : "0.5px solid transparent",
-                cursor: "pointer", transition: "all 0.15s",
+              onFocus={() => { if (!adding) setAdding("thought"); }}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") { e.preventDefault(); toggleDraftBold(); return; }
+                if (e.key === "Escape") { setAdding(null); setDraftTitle(""); setDraftUrl(""); return; }
+                if (e.key === "Enter" && !e.shiftKey && hasContent) { e.preventDefault(); commitAdd(); }
               }}
-            >
-              <span style={{ fontSize: 11 }}>{m.emoji}</span>
-              {m.label}
-              {logged && !active && <span style={{ fontSize: 9, opacity: 0.7 }}>✓</span>}
-            </button>
-          );
-        })}
-      </div>
+              placeholder="what's on your mind?"
+              rows={adding ? 3 : 1}
+              className="min-h-0 resize-none border-none bg-transparent px-0 py-0 text-[13px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+              style={{ width: "100%", background: "transparent", color: "#2A2825", padding: "10px 12px", fontWeight: 400, lineHeight: 1.5 }}
+            />
 
-      {/* Capture add form */}
-      <AnimatePresence>
-        {adding && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            style={{ overflow: "hidden", marginBottom: 8 }}
-          >
-            <div style={{ borderRadius: 10, background: "hsl(var(--muted))", padding: "10px 12px" }}>
-              {(adding === "thought" || adding === "task") && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={toggleDraftBold}
-                      style={{ borderRadius: 8, border: "1px solid rgba(0,0,0,0.08)", background: "#fff", color: "hsl(var(--foreground))", padding: "4px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
-                    >
-                      B
-                    </button>
-                  </div>
-                  <span style={{ fontSize: 10, color: "hsl(var(--muted-foreground))", fontWeight: 500 }}>
-                    `Shift+Enter` new line
-                  </span>
-                </div>
-              )}
-              <Textarea
-                ref={draftTitleRef}
-                autoFocus
-                value={draftTitle}
-                onChange={(e) => adding === "link" ? handleLinkTitleChange(e.target.value) : setDraftTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
-                    e.preventDefault();
-                    toggleDraftBold();
-                    return;
-                  }
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    commitAdd();
-                  }
-                }}
-                placeholder={adding === "link" ? "paste a URL or label…" : `new ${adding}…`}
-                rows={adding === "thought" || adding === "task" ? 3 : 2}
-                className="min-h-0 resize-none border-none bg-transparent px-0 py-0 text-[13px] font-medium shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                style={{ width: "100%", background: "transparent", color: "hsl(var(--foreground))" }}
-              />
-              {kindMeta(adding).needsUrl && (
-                <input
-                  value={draftUrl}
-                  onChange={(e) => setDraftUrl(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && commitAdd()}
-                  placeholder="https://…"
-                  style={{ width: "100%", background: "transparent", border: "none", outline: "none", fontSize: 11, marginTop: 4, color: "hsl(var(--muted-foreground))" }}
-                />
-              )}
-              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                <button type="button" onClick={commitAdd} style={{ borderRadius: 20, background: "hsl(var(--foreground))", color: "#fff", border: "none", padding: "4px 12px", fontSize: 11, fontWeight: 500, cursor: "pointer" }}>Add</button>
-                <button type="button" onClick={() => setAdding(null)} style={{ borderRadius: 20, background: "transparent", border: "none", padding: "4px 8px", fontSize: 11, color: "hsl(var(--muted-foreground))", cursor: "pointer" }}>cancel</button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Meal add form */}
-      <AnimatePresence>
-        {addingMeal && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            style={{ overflow: "hidden", marginBottom: 8 }}
-          >
-            <div style={{
-              borderRadius: 10,
-              background: "#F1EFE8",
-              padding: "10px 12px",
-              border: "0.5px solid #D3D1C7",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                <span>{MEALS.find((m) => m.type === addingMeal)?.emoji}</span>
-                <span style={{ fontSize: 11, fontWeight: 500, color: "#444441" }}>
-                  {MEALS.find((m) => m.type === addingMeal)?.label}
-                </span>
-              </div>
+            {/* URL field — only for link kind when there's a label */}
+            {adding === "link" && draftTitle.trim() && !/^https?:\/\//.test(draftTitle.trim()) && (
               <input
-                ref={mealInputRef}
-                value={mealText}
-                onChange={(e) => setMealText(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") commitMeal(); if (e.key === "Escape") setAddingMeal(null); }}
-                placeholder={MEALS.find((m) => m.type === addingMeal)?.placeholder}
-                style={{
-                  width: "100%", background: "transparent", border: "none", outline: "none",
-                  fontSize: 13, fontWeight: 500, color: "#444441",
-                  boxSizing: "border-box",
-                }}
+                value={draftUrl}
+                onChange={(e) => setDraftUrl(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") commitAdd(); if (e.key === "Escape") { setAdding(null); setDraftTitle(""); setDraftUrl(""); } }}
+                placeholder="https://…"
+                style={{ width: "100%", background: "transparent", border: "none", borderTop: "1px solid #E8E5E0", outline: "none", fontSize: 12, padding: "6px 12px", color: "#5F5E5A", boxSizing: "border-box" }}
               />
-              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                <button onClick={commitMeal} style={{ borderRadius: 20, background: "#444441", color: "#fff", border: "none", padding: "4px 12px", fontSize: 11, fontWeight: 500, cursor: "pointer" }}>Log</button>
-                <button onClick={() => setAddingMeal(null)} style={{ borderRadius: 20, background: "transparent", border: "none", padding: "4px 8px", fontSize: 11, color: "#888580", cursor: "pointer", opacity: 0.7 }}>cancel</button>
+            )}
+
+            {/* Footer: kind pill + add button — only when focused/has content */}
+            {adding && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderTop: "1px solid #EDEBE7" }}>
+                {/* Kind selector */}
+                <div style={{ position: "relative" }}>
+                  <button
+                    type="button"
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={() => setKindPickerOpen(v => !v)}
+                    style={{ display: "flex", alignItems: "center", gap: 4, borderRadius: 20, padding: "3px 8px", background: "#EEEDFE", border: "none", cursor: "pointer", fontSize: 10, fontWeight: 600, color: "#534AB7" }}
+                  >
+                    <KindIcon size={9} strokeWidth={2.2} color="#534AB7" />
+                    {activeKind}
+                    <span style={{ fontSize: 8, opacity: 0.6 }}>▾</span>
+                  </button>
+                  {kindPickerOpen && (
+                    <>
+                      <div style={{ position: "fixed", inset: 0, zIndex: 90 }} onClick={() => setKindPickerOpen(false)} />
+                      <div style={{ position: "absolute", bottom: "calc(100% + 4px)", left: 0, background: "#fff", border: "1px solid #E8E5E0", borderRadius: 10, padding: 4, zIndex: 91, boxShadow: "0 8px 24px rgba(0,0,0,0.10)", minWidth: 110 }}>
+                        {KINDS.map(k => {
+                          const Icon = k.icon;
+                          return (
+                            <button key={k.id} type="button" onMouseDown={e => e.preventDefault()} onClick={() => { setAdding(k.id); setKindPickerOpen(false); }}
+                              style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", padding: "5px 8px", background: activeKind === k.id ? "#EEEDFE" : "transparent", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 11, fontWeight: activeKind === k.id ? 600 : 400, color: activeKind === k.id ? "#534AB7" : "#444441", textAlign: "left" }}
+                            >
+                              <Icon size={10} strokeWidth={2} color={activeKind === k.id ? "#534AB7" : "#888"} />
+                              {k.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <span style={{ fontSize: 9, color: "#C0BDB8", marginLeft: 2 }}>Shift+Enter new line</span>
+
+                <div style={{ marginLeft: "auto", display: "flex", gap: 5 }}>
+                  <button type="button" onClick={() => { setAdding(null); setDraftTitle(""); setDraftUrl(""); }} style={{ borderRadius: 20, background: "transparent", border: "none", padding: "4px 8px", fontSize: 11, color: "#AAA", cursor: "pointer" }}>
+                    esc
+                  </button>
+                  <button type="button" onClick={commitAdd} disabled={!hasContent}
+                    style={{ borderRadius: 20, background: hasContent ? "#3C3489" : "#E8E5E0", color: hasContent ? "#fff" : "#AAA", border: "none", padding: "4px 14px", fontSize: 11, fontWeight: 600, cursor: hasContent ? "pointer" : "default", transition: "all 0.15s" }}>
+                    Add
+                  </button>
+                </div>
               </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Unified item list */}
       <div style={{ flex: 1, overflowY: "auto" }} className="scrollbar-hidden">
@@ -721,42 +629,6 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
         )}
         <AnimatePresence initial={false}>
           {allItems.map((item) => {
-            if (item.kind === "meal") {
-              const mealMeta = MEALS.find((m) => m.type === item.mealType)!;
-              const colors = item.mealType ? MEAL_COLORS[item.mealType] : MEAL_COLORS.lunch;
-              return (
-                <motion.div
-                  key={item.id}
-                  layout
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: -8 }}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 8,
-                    borderRadius: 10, background: "#FAFAFA",
-                    border: "0.5px solid #E5E4E0",
-                    padding: "8px 10px", marginBottom: 5,
-                  }}
-                >
-                  <span style={{ fontSize: 14, flexShrink: 0 }}>{mealMeta?.emoji ?? "🍴"}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 11, fontWeight: 500, color: "#444441", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {item.title}
-                    </p>
-                    <span style={{ fontSize: 9, color: "#A8A4A0", opacity: 0.65 }}>
-                      {mealMeta?.label ?? "meal"} · {format(item.createdAt, "h:mma").toLowerCase()}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => removeCapture(item.id)}
-                    style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "#D3D1C7", opacity: 0.4 }}
-                  >
-                    <X size={11} />
-                  </button>
-                </motion.div>
-              );
-            }
-
             // Rich link card
             if (item.kind === "link") {
               return (

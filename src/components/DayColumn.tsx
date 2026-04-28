@@ -7,7 +7,8 @@ import { CalEvent, CaptureItem, Tag, DURATIONS } from "@/types/event";
 import { EventBubble } from "./EventBubble";
 import { NowMarker } from "./NowMarker";
 import { nowMinutes, minutesToLabel, durationLabel } from "@/lib/event-utils";
-import { patchCapture } from "@/lib/capture-store";
+import { patchCapture, removeCapture } from "@/lib/capture-store";
+import { tagPaletteById } from "@/lib/tags";
 
 // ── Sticker storage ───────────────────────────────────────────────────
 const STICKER_STORAGE = "horizon_stickers";
@@ -45,6 +46,28 @@ export const DAY_TYPES: { id: DayType; label: string; emoji: string; bg: string;
   { id: "travel",  label: "Travel",     emoji: "✈️", bg: "#E6F1FB", text: "#0C447C", headerBg: "#E6F1FB", border: "#B5D4F4" },
   { id: "sick",    label: "Sick day",   emoji: "🤒", bg: "#FEF0EE", text: "#C0392B", headerBg: "#FEF0EE", border: "#FACEC9" },
 ];
+
+const DAY_TYPE_DEFS_KEY = "horizon_day_type_defs";
+export const DAY_TYPE_DEFS_CHANGED = "horizon:day-types-changed";
+
+export function loadCustomDayTypeDefs(): typeof DAY_TYPES {
+  try {
+    const raw = localStorage.getItem(DAY_TYPE_DEFS_KEY);
+    if (!raw) return DAY_TYPES.map(d => ({ ...d }));
+    const saved: Array<Partial<typeof DAY_TYPES[0]> & { id: DayType }> = JSON.parse(raw);
+    return DAY_TYPES.map(base => ({
+      ...base,
+      ...(saved.find(s => s.id === base.id) ?? {}),
+    }));
+  } catch {
+    return DAY_TYPES.map(d => ({ ...d }));
+  }
+}
+
+export function saveCustomDayTypeDefs(defs: typeof DAY_TYPES) {
+  localStorage.setItem(DAY_TYPE_DEFS_KEY, JSON.stringify(defs));
+  window.dispatchEvent(new Event(DAY_TYPE_DEFS_CHANGED));
+}
 
 const DAY_TYPE_STORAGE = "horizon_day_types";
 
@@ -149,17 +172,15 @@ function snapDuration(mins: number) {
   return Math.max(15, Math.round(mins / 15) * 15);
 }
 
-function tagColors(tagId?: string): { bg: string; text: string; sub: string; pale: string } {
-  switch (tagId) {
-    case "work":     return { bg: "#AFA9EC", text: "#3C3489", sub: "#534AB7", pale: "#EEEDFE" };
-    case "deepwork": return { bg: "#9FE1CB", text: "#085041", sub: "#0F6E56", pale: "#E1F5EE" };
-    case "study":    return { bg: "#B5D4F4", text: "#0C447C", sub: "#185FA5", pale: "#E6F1FB" };
-    case "personal": return { bg: "#F4C0D1", text: "#72243E", sub: "#993556", pale: "#FBEAF0" };
-    case "social":   return { bg: "#FAC775", text: "#633806", sub: "#854F0B", pale: "#FAEEDA" };
-    case "health":   return { bg: "#C0DD97", text: "#27500A", sub: "#3B6D11", pale: "#EAF3DE" };
-    case "errand":   return { bg: "#F5C4B3", text: "#712B13", sub: "#993C1D", pale: "#FAECE7" };
-    default:         return { bg: "#D3D1C7", text: "#444441", sub: "#5F5E5A", pale: "#F1EFE8" };
-  }
+function minsToTimeInput(mins: number): string {
+  const h = Math.floor(mins / 60) % 24;
+  const m = mins % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function timeInputToMins(val: string): number {
+  const [h, m] = val.split(":").map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
 }
 
 interface DraftEvent {
@@ -256,7 +277,7 @@ function StickerNote({ item, index, onPeel }: { item: CaptureItem; index: number
 }
 
 // ── Task Pill — floating timed task on the timeline ───────────────
-function TaskPill({ task, timelineRef }: { task: CaptureItem; timelineRef: React.RefObject<HTMLDivElement | null> }) {
+function TaskPill({ task, tags, timelineRef, onDelete }: { task: CaptureItem; tags: Tag[]; timelineRef: React.RefObject<HTMLDivElement | null>; onDelete: () => void }) {
   const dragRef = useRef<{ startY: number; origStart: number } | null>(null);
   const [liveStart, setLiveStart] = useState(task.start!);
   const [dragging, setDragging] = useState(false);
@@ -287,16 +308,7 @@ function TaskPill({ task, timelineRef }: { task: CaptureItem; timelineRef: React
   }
 
   const topY = timeToY(liveStart);
-  const tagC = (() => {
-    switch (task.tagId) {
-      case "work":     return { bg: "#EAE8FB", text: "#3C3489", border: "#C5BEF5" };
-      case "deepwork": return { bg: "#D6F5E8", text: "#1A5C3A", border: "#9FE1CB" };
-      case "study":    return { bg: "#DCEEFA", text: "#08305A", border: "#A2CAE8" };
-      case "personal": return { bg: "#FBEAF0", text: "#72243E", border: "#F4C0D1" };
-      case "social":   return { bg: "#FEF3C7", text: "#92400E", border: "#FAC775" };
-      default:         return { bg: "#F0EDE8", text: "#4A4540", border: "#D4CEC8" };
-    }
-  })();
+  const tagC = tagPaletteById(tags, task.tagId);
 
   return (
     <div
@@ -319,7 +331,7 @@ function TaskPill({ task, timelineRef }: { task: CaptureItem; timelineRef: React
         gap: 5,
         padding: "3px 8px 3px 6px",
         borderRadius: 20,
-        background: done ? "#D6F5E8" : tagC.bg,
+        background: done ? "#D6F5E8" : tagC.pale,
         border: `1.5px ${done ? "solid" : "dashed"} ${done ? "#9FE1CB" : tagC.border}`,
         boxShadow: dragging ? "0 4px 14px rgba(0,0,0,0.14)" : "0 1px 4px rgba(0,0,0,0.07)",
         fontSize: 10,
@@ -345,6 +357,13 @@ function TaskPill({ task, timelineRef }: { task: CaptureItem; timelineRef: React
         <span style={{ flexShrink: 0, opacity: 0.55, fontSize: 9, marginLeft: 2 }}>
           {minutesToLabel(liveStart)}
         </span>
+        <button
+          onMouseDown={e => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0, color: tagC.text, opacity: 0.5 }}
+        >
+          <X size={9} strokeWidth={3} />
+        </button>
       </div>
     </div>
   );
@@ -361,6 +380,13 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
   const [headerDragOver, setHeaderDragOver] = useState(false);
   const [showTypePicker, setShowTypePicker] = useState(false);
   const [pickerPos, setPickerPos] = useState({ top: 0, left: 0 });
+  const [dayTypeDefs, setDayTypeDefs] = useState(() => loadCustomDayTypeDefs());
+
+  useEffect(() => {
+    function onDefsChanged() { setDayTypeDefs(loadCustomDayTypeDefs()); }
+    window.addEventListener(DAY_TYPE_DEFS_CHANGED, onDefsChanged);
+    return () => window.removeEventListener(DAY_TYPE_DEFS_CHANGED, onDefsChanged);
+  }, []);
   const typePickerRef = useRef<HTMLDivElement>(null);
   const typeBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -379,7 +405,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
     return () => document.removeEventListener("mousedown", onDown);
   }, [showTypePicker]);
 
-  const dayTypeDef = dayType ? DAY_TYPES.find(d => d.id === dayType) : null;
+  const dayTypeDef = dayType ? dayTypeDefs.find(d => d.id === dayType) : null;
 
   function handleHeaderDragOver(e: React.DragEvent) {
     if (!e.dataTransfer.types.includes("text/capture-json")) return;
@@ -425,10 +451,10 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
 
   if (isT) {
     bg = "#FFFFFF";
-    headerBg = "#EAF3DE";
-    border = "1.5px solid #3B6D11";
-    titleColor = "#27500A";
-    subColor = "#3B6D11";
+    headerBg = dayTypeDef ? dayTypeDef.headerBg : "#EAF3DE";
+    border = dayTypeDef ? `1.5px solid ${dayTypeDef.border}` : "1.5px solid #3B6D11";
+    titleColor = dayTypeDef ? dayTypeDef.text : "#27500A";
+    subColor = dayTypeDef ? dayTypeDef.text : "#3B6D11";
   } else if (isSelected) {
     bg = "#FFFFFF";
     headerBg = dayTypeDef ? dayTypeDef.headerBg : "transparent";
@@ -622,7 +648,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
       const relY = e.clientY - timelineRect.top;
       const relX = e.clientX - timelineRect.left;
       const distY = Math.abs(e.clientY - (timelineRect.top + cursorY));
-      const distX = Math.abs(e.clientX - (timelineRect.left + (layout.lane / layout.totalLanes) * timelineRect.width));
+      const distX = Math.abs(e.clientX - (timelineRect.left + layout.lane * 14));
       if (!dragging && distY < 5 && distX < 5) return;
 
       if (!dragging) {
@@ -639,9 +665,11 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
       const clamped = Math.max(DAY_START, Math.min(DAY_END - event.duration, snapped));
       setLiveStart(clamped);
 
-      // Horizontal: cursor X as fraction of column width → lane index
-      const fraction = Math.max(0, Math.min(1, relX / timelineRect.width));
-      const newLane = Math.min(moveDragRef.current.totalLanes - 1, Math.floor(fraction * moveDragRef.current.totalLanes));
+      // Horizontal: shift lane by how many LANE_INDENT steps left/right of start X
+      const LANE_INDENT = 14;
+      const startX = timelineRect.left + moveDragRef.current.origLane * LANE_INDENT;
+      const deltaX = e.clientX - startX;
+      const newLane = Math.max(0, Math.min(moveDragRef.current.totalLanes - 1, moveDragRef.current.origLane + Math.round(deltaX / LANE_INDENT)));
       setLiveLane(newLane);
     }
 
@@ -650,14 +678,15 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
       document.removeEventListener("mouseup", onUp);
       if (dragging && moveDragRef.current && timelineRect) {
         const relY = e.clientY - timelineRect.top;
-        const relX = e.clientX - timelineRect.left;
 
         const rawMins = yToTime(relY) - moveDragRef.current.cursorOffsetMins;
         const snapped = snapStart(rawMins);
         const clamped = Math.max(DAY_START, Math.min(DAY_END - event.duration, snapped));
 
-        const fraction = Math.max(0, Math.min(1, relX / timelineRect.width));
-        const newLane = Math.min(moveDragRef.current.totalLanes - 1, Math.floor(fraction * moveDragRef.current.totalLanes));
+        const LANE_INDENT = 14;
+        const startX = timelineRect.left + moveDragRef.current.origLane * LANE_INDENT;
+        const deltaX = e.clientX - startX;
+        const newLane = Math.max(0, Math.min(moveDragRef.current.totalLanes - 1, moveDragRef.current.origLane + Math.round(deltaX / LANE_INDENT)));
 
         const patch: Partial<CalEvent> = { start: clamped };
         if (newLane !== moveDragRef.current.origLane) patch.laneOverride = newLane;
@@ -806,7 +835,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
     return { x, y };
   }
 
-  const ghostColors = tagColors(draftTagId);
+  const ghostColors = tagPaletteById(tags, draftTagId);
 
   const creationPanel = draft && createPortal(
     <>
@@ -834,7 +863,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
         }}
       >
         {/* Color stripe */}
-        <div style={{ height: 8, background: draftTagId ? tagColors(draftTagId).bg : "#E6E4DD", flexShrink: 0 }} />
+        <div style={{ height: 8, background: draftTagId ? tagPaletteById(tags, draftTagId).bg : "#E6E4DD", flexShrink: 0 }} />
 
         {/* Header */}
         <div style={{ padding: "16px 18px 12px", display: "flex", alignItems: "flex-start", gap: 10, flexShrink: 0 }}>
@@ -860,15 +889,48 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
         {/* Scrollable fields */}
         <div style={{ flex: 1, overflowY: "auto", padding: "0 18px 12px" }} className="scrollbar-hidden">
 
-          {/* Duration */}
+          {/* Time — start & end */}
           <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: "#AAA", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 6 }}>Duration</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: "#AAA", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 8 }}>Time</label>
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 10 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 10, fontWeight: 600, color: "#BBB", display: "block", marginBottom: 4 }}>Start</label>
+                <input
+                  type="time"
+                  value={minsToTimeInput(draft.start)}
+                  onChange={e => {
+                    const newStart = timeInputToMins(e.target.value);
+                    setDraft(prev => prev ? { ...prev, start: newStart } : prev);
+                    setGhost(prev => prev ? { ...prev, start: newStart } : prev);
+                  }}
+                  style={{ width: "100%", background: "#F5F3F0", border: "1.5px solid rgba(123,115,214,0.22)", borderRadius: 10, padding: "8px 10px", fontSize: 14, fontWeight: 600, color: "#3C3489", outline: "none", boxSizing: "border-box", cursor: "pointer" }}
+                />
+              </div>
+              <span style={{ fontSize: 14, color: "#C8C4BE", paddingBottom: 10, flexShrink: 0 }}>→</span>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 10, fontWeight: 600, color: "#BBB", display: "block", marginBottom: 4 }}>End</label>
+                <input
+                  type="time"
+                  value={minsToTimeInput(draft.start + draft.duration)}
+                  onChange={e => {
+                    const endMins = timeInputToMins(e.target.value);
+                    const newDur = Math.max(15, endMins - draft.start);
+                    setDraft(prev => prev ? { ...prev, duration: newDur } : prev);
+                    setGhost(prev => prev ? { ...prev, duration: newDur } : prev);
+                  }}
+                  style={{ width: "100%", background: "#F5F3F0", border: "1.5px solid rgba(123,115,214,0.22)", borderRadius: 10, padding: "8px 10px", fontSize: 14, fontWeight: 600, color: "#3C3489", outline: "none", boxSizing: "border-box", cursor: "pointer" }}
+                />
+              </div>
+            </div>
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
               {DURATIONS.map(d => (
                 <button type="button" key={d}
-                  onClick={() => setDraft(prev => prev ? { ...prev, duration: d } : prev)}
+                  onClick={() => {
+                    setDraft(prev => prev ? { ...prev, duration: d } : prev);
+                    setGhost(prev => prev ? { ...prev, duration: d } : prev);
+                  }}
                   style={{
-                    padding: "6px 12px", borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                    padding: "5px 10px", borderRadius: 10, fontSize: 11, fontWeight: 600, cursor: "pointer",
                     background: draft.duration === d ? "#3C3489" : "#F5F3F0",
                     color: draft.duration === d ? "#fff" : "#3C3489",
                     border: "1.5px solid " + (draft.duration === d ? "#3C3489" : "rgba(123,115,214,0.22)"),
@@ -889,7 +951,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
                   border: "none",
                 }}>none</button>
                 {tags.map(t => {
-                  const tc = tagColors(t.id);
+                  const tc = tagPaletteById(tags, t.id);
                   return (
                     <button type="button" key={t.id} onClick={() => setDraftTagId(t.id)} style={{
                       padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
@@ -997,13 +1059,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
   );
 
   // opacity fade for days further out
-  const colOpacity = (() => {
-    const diff = Math.abs((date.getTime() - new Date().setHours(0,0,0,0)) / 86400000);
-    if (isT || isTom) return 1;
-    if (diff <= 2) return 0.82;
-    if (isWeekend) return 0.55;
-    return 1;
-  })();
+  const colOpacity = 1;
 
   return (
     <div style={{
@@ -1115,7 +1171,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
           }}
         >
           <p style={{ fontSize: 10, fontWeight: 700, color: "#AAA", letterSpacing: "0.07em", textTransform: "uppercase", margin: "2px 6px 6px" }}>Day type</p>
-          {DAY_TYPES.map(dt => (
+          {dayTypeDefs.map(dt => (
             <button
               key={dt.id}
               type="button"
@@ -1366,7 +1422,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
         ) : compact ? (
           // Compact mode: small dot pills at event time
           sorted.map((ev) => {
-            const colors = tagColors(ev.tagId);
+            const colors = tagPaletteById(tags, ev.tagId);
             return (
               <div
                 key={ev.id}
@@ -1402,8 +1458,11 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
           const layout = eventLayoutMap.get(ev.id) ?? { lane: 0, totalLanes: 1 };
           const displayLane = isMoving ? liveLane : layout.lane;
           const displayTotalLanes = isMoving ? liveTotalLanes : layout.totalLanes;
-          const laneWidth = 100 / displayTotalLanes;
-          const leftOffset = displayLane * laneWidth;
+
+          // Side-by-side layout: divide column width equally among overlapping events
+          const GAP = 2; // px gap between adjacent event columns
+          const leftCalc = `calc(${(displayLane / displayTotalLanes) * 100}% + ${GAP}px)`;
+          const widthCalc = `calc(${(1 / displayTotalLanes) * 100}% - ${GAP * 2}px)`;
 
           return (
             <div
@@ -1418,10 +1477,10 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
               style={{
                 position: "absolute",
                 top: timeToY(displayStart),
-                left: `${leftOffset}%`,
-                width: `${laneWidth}%`,
+                left: leftCalc,
+                width: widthCalc,
                 height: Math.max(durationToHeight(displayStart, Math.min(displayDuration, DAY_END - displayStart)), 30),
-                zIndex: isResizing || isResizingTop ? 15 : isMoving ? 16 : 10,
+                zIndex: isResizing || isResizingTop ? 15 : isMoving ? 16 : (10 + displayLane),
                 transition: (isResizing || isResizingTop || isMoving) ? "none" : "left 0.15s ease, width 0.15s ease",
                 cursor: isMoving ? "grabbing" : "grab",
                 opacity: isMoving ? 0.88 : 1,
@@ -1549,7 +1608,9 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
           <TaskPill
             key={task.id}
             task={task}
+            tags={tags}
             timelineRef={timelineRef}
+            onDelete={() => removeCapture(task.id)}
           />
         ))}
 

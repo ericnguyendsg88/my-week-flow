@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { X, Plus, Trash2, GripVertical } from "lucide-react";
 import { Tag, TagColor } from "@/types/event";
 import { TAG_COLORS } from "@/lib/tags";
-import { DAY_TYPES, DayType } from "./DayColumn";
+import { DAY_TYPES, DayType, loadCustomDayTypeDefs, saveCustomDayTypeDefs } from "./DayColumn";
 
 // ── Storage helpers ───────────────────────────────────────────────────────────
 const TAGS_KEY      = "horizon_tags";
@@ -287,7 +287,7 @@ function TagsTab({ tags, onChange }: { tags: Tag[]; onChange: (t: Tag[]) => void
 // ── Day Types tab ─────────────────────────────────────────────────────────────
 function DayTypesTab() {
   const [dayTypes, setDayTypes] = useState<DayTypeDef[]>(() =>
-    DAY_TYPES.map(d => ({ ...d }))
+    loadCustomDayTypeDefs()
   );
   const [editing, setEditing] = useState<string | null>(null);
 
@@ -303,13 +303,25 @@ function DayTypesTab() {
   ];
 
   function updateLabel(id: string, label: string) {
-    setDayTypes(prev => prev.map(d => d.id === id ? { ...d, label } : d));
+    setDayTypes(prev => {
+      const next = prev.map(d => d.id === id ? { ...d, label } : d);
+      saveCustomDayTypeDefs(next as typeof DAY_TYPES);
+      return next;
+    });
   }
   function updateEmoji(id: string, emoji: string) {
-    setDayTypes(prev => prev.map(d => d.id === id ? { ...d, emoji } : d));
+    setDayTypes(prev => {
+      const next = prev.map(d => d.id === id ? { ...d, emoji } : d);
+      saveCustomDayTypeDefs(next as typeof DAY_TYPES);
+      return next;
+    });
   }
   function updateColors(id: string, preset: typeof PRESET_COLORS[0]) {
-    setDayTypes(prev => prev.map(d => d.id === id ? { ...d, bg: preset.bg, text: preset.text, border: preset.border } : d));
+    setDayTypes(prev => {
+      const next = prev.map(d => d.id === id ? { ...d, bg: preset.bg, headerBg: preset.bg, text: preset.text, border: preset.border } : d);
+      saveCustomDayTypeDefs(next as typeof DAY_TYPES);
+      return next;
+    });
   }
 
   return (

@@ -5,7 +5,7 @@ import { format, eachDayOfInterval, startOfWeek, endOfWeek, startOfMonth, endOfM
 import { X, Trash2, Check, Ban, RotateCcw, Lightbulb, Link2, FileText, Bookmark, CheckSquare, ExternalLink, Pencil, Plus, Share2, type LucideIcon } from "lucide-react";
 import { ShareInviteModal } from "./ShareInviteModal";
 import { CalEvent, CaptureKind, Tag, SpendingRecord, SpendingCategory, SPENDING_CATEGORIES } from "@/types/event";
-import { getTag } from "@/lib/tags";
+import { getTag, tagPaletteById } from "@/lib/tags";
 import { minutesToLabel, durationLabel, nowMinutes } from "@/lib/event-utils";
 
 const PANEL_MARGIN = 16;
@@ -29,18 +29,7 @@ const KIND_COLORS: Record<CaptureKind, { bg: string; text: string }> = {
   meal:    { bg: "#FEF3C7", text: "#92400E" },
 };
 
-function tagColors(tagId?: string): { bg: string; text: string; sub: string; light: string; pale: string } {
-  switch (tagId) {
-    case "work":     return { bg: "#AFA9EC", text: "#3C3489", sub: "#534AB7", light: "#CECBF6", pale: "#EEEDFE" };
-    case "deepwork": return { bg: "#9FE1CB", text: "#085041", sub: "#0F6E56", light: "#E1F5EE", pale: "#E1F5EE" };
-    case "study":    return { bg: "#B5D4F4", text: "#0C447C", sub: "#185FA5", light: "#E6F1FB", pale: "#E6F1FB" };
-    case "personal": return { bg: "#F4C0D1", text: "#72243E", sub: "#993556", light: "#FBEAF0", pale: "#FBEAF0" };
-    case "social":   return { bg: "#FAC775", text: "#633806", sub: "#854F0B", light: "#FAEEDA", pale: "#FAEEDA" };
-    case "health":   return { bg: "#C0DD97", text: "#27500A", sub: "#3B6D11", light: "#EAF3DE", pale: "#EAF3DE" };
-    case "errand":   return { bg: "#F5C4B3", text: "#712B13", sub: "#993C1D", light: "#FAECE7", pale: "#FAECE7" };
-    default:         return { bg: "#D3D1C7", text: "#444441", sub: "#5F5E5A", light: "#F1EFE8", pale: "#F1EFE8" };
-  }
-}
+
 
 function EditMiniCal({ selected, onSelect }: { selected: string; onSelect: (d: string) => void }) {
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date(selected + "T00:00:00")));
@@ -144,7 +133,7 @@ function totalSpendings(spendings: SpendingRecord[]) {
 
 export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, onSelect, isResizing, compact = false }: Props) {
   const tag = tags ? getTag(tags, event.tagId) : undefined;
-  const colors = tagColors(tag?.id ?? event.tagId);
+  const colors = tagPaletteById(tags ?? [], tag?.id ?? event.tagId);
   const [showDetail, setShowDetail] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [panelPos, setPanelPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -523,7 +512,7 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
                       border: "none",
                     }}>none</button>
                     {tags.map(t => {
-                      const tc = tagColors(t.id);
+                      const tc = tagPaletteById(tags, t.id);
                       return (
                         <button type="button" key={t.id} onClick={() => setEditTagId(t.id)} style={{
                           padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
@@ -608,7 +597,7 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
             <div style={{ padding: "0 18px 10px" }}>
               <FieldRow label="Date" value={dateLabel} />
               <FieldRow label="Time" value={<>{minutesToLabel(event.start)} → {minutesToLabel(displayEndMin)} <span style={{ fontSize: 11, color: "#bbb" }}>· {durationLabel(event.duration)}</span></>} />
-              {displayTag && <FieldRow label="Tag" value={<span style={{ fontSize: 12, fontWeight: 700, background: tagColors(displayTag.id).bg, color: tagColors(displayTag.id).text, borderRadius: 12, padding: "2px 10px" }}>#{displayTag.name}</span>} />}
+              {displayTag && <FieldRow label="Tag" value={<span style={{ fontSize: 12, fontWeight: 700, background: tagPaletteById(tags ?? [], displayTag.id).bg, color: tagPaletteById(tags ?? [], displayTag.id).text, borderRadius: 12, padding: "2px 10px" }}>#{displayTag.name}</span>} />}
               {isTentative && (
                 <FieldRow label="Status" value={
                   <span style={{ fontSize: 12, fontWeight: 600, color: "#7A5423", background: "#F6E7CF", borderRadius: 12, padding: "2px 10px", border: "1px dashed #D3AE78" }}>
@@ -642,6 +631,11 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
                         {att.url && (
                           <button type="button" onClick={() => window.open(att.url, "_blank")} style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "#aaa" }}>
                             <ExternalLink size={11} />
+                          </button>
+                        )}
+                        {onUpdate && (
+                          <button type="button" onClick={() => onUpdate?.({ attachedItems: event.attachedItems?.filter(i => i.id !== att.id) })} title="Remove" style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "#ccc", display: "flex", alignItems: "center" }}>
+                            <X size={11} strokeWidth={2} />
                           </button>
                         )}
                       </div>
@@ -911,17 +905,7 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
           }} />
         )}
 
-        {/* Left accent bar for other states (not in-progress) */}
-        {!isInProgress && !(isTentative && !isCompleted && !isSkipped) && !isCompleted && !isSkipped && (
-          <div style={{
-            position: "absolute",
-            top: 6, bottom: 6, left: 0,
-            width: 3,
-            borderRadius: "0 2px 2px 0",
-            background: colors.sub,
-            zIndex: 1,
-          }} />
-        )}
+
 
         {/* Tentative "?" badge — top-right corner */}
         {isTentative && !isCompleted && !isSkipped && (
@@ -977,7 +961,7 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
         )}
 
         {/* Title */}
-        <div style={{ position: "relative", zIndex: 1, flex: "0 0 auto", minHeight: 0, marginTop: isInProgress && !isCompleted && !isSkipped ? 14 : 0 }}>
+        <div style={{ position: "relative", zIndex: 1, flex: "0 0 auto", minHeight: 0, marginTop: 0 }}>
           <span style={{
             fontSize: 12,
             fontWeight: 500,

@@ -112,3 +112,33 @@ export function tagClasses(tag?: Tag): TagClassSet {
   if (!tag) return TAG_CLASSES.purple;
   return TAG_CLASSES[tag.color];
 }
+
+export interface TagPalette {
+  bg: string;
+  text: string;
+  sub: string;
+  light: string;
+  pale: string;
+  border: string;
+  accent: string;
+}
+
+export const TAG_HEX: Record<TagColor, TagPalette> = {
+  purple: { bg: "#AFA9EC", text: "#3C3489", sub: "#534AB7", light: "#CECBF6", pale: "#EEEDFE", border: "#C5BEF5", accent: "#534AB7" },
+  teal:   { bg: "#9FE1CB", text: "#085041", sub: "#0F6E56", light: "#E1F5EE", pale: "#E1F5EE", border: "#9FE1CB", accent: "#0F6E56" },
+  coral:  { bg: "#F5C4B3", text: "#712B13", sub: "#993C1D", light: "#FAECE7", pale: "#FAECE7", border: "#F5C4B3", accent: "#993C1D" },
+  pink:   { bg: "#F4C0D1", text: "#72243E", sub: "#993556", light: "#FBEAF0", pale: "#FBEAF0", border: "#F4C0D1", accent: "#993556" },
+  blue:   { bg: "#B5D4F4", text: "#0C447C", sub: "#185FA5", light: "#E6F1FB", pale: "#E6F1FB", border: "#B5D4F4", accent: "#185FA5" },
+  green:  { bg: "#C0DD97", text: "#27500A", sub: "#3B6D11", light: "#EAF3DE", pale: "#EAF3DE", border: "#B8DDA0", accent: "#3B6D11" },
+  amber:  { bg: "#FAC775", text: "#633806", sub: "#854F0B", light: "#FAEEDA", pale: "#FAEEDA", border: "#FAC775", accent: "#854F0B" },
+  gray:   { bg: "#D3D1C7", text: "#444441", sub: "#5F5E5A", light: "#F1EFE8", pale: "#F1EFE8", border: "#C8C4BE", accent: "#5F5E5A" },
+};
+
+export function tagPalette(tag?: Tag): TagPalette {
+  if (!tag) return TAG_HEX.gray;
+  return TAG_HEX[tag.color] ?? TAG_HEX.gray;
+}
+
+export function tagPaletteById(tags: Tag[], id?: string): TagPalette {
+  return tagPalette(getTag(tags, id));
+}

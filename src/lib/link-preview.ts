@@ -38,10 +38,32 @@ async function fetchYouTube(url: string): Promise<LinkPreview> {
   };
 }
 
+function isSpotifyUrl(url: string): boolean {
+  try { return new URL(url).hostname === "open.spotify.com"; } catch { return false; }
+}
+
+async function fetchSpotify(url: string): Promise<LinkPreview> {
+  const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
+  const res = await fetch(oembedUrl, { signal: AbortSignal.timeout(6000) });
+  if (!res.ok) throw new Error("oembed failed");
+  const json = await res.json();
+  return {
+    title: json.title,
+    description: json.provider_name ?? "Spotify",
+    image: json.thumbnail_url,
+    site: "Spotify",
+  };
+}
+
 export async function fetchLinkPreview(url: string): Promise<LinkPreview> {
   // YouTube: use oEmbed — returns real title without JS rendering
   if (getYouTubeId(url) || url.includes("youtube.com") || url.includes("youtu.be")) {
     try { return await fetchYouTube(url); } catch {}
+  }
+
+  // Spotify: use oEmbed — returns title + artwork without CORS issues
+  if (isSpotifyUrl(url)) {
+    try { return await fetchSpotify(url); } catch {}
   }
 
   // General: use allorigins proxy to fetch raw HTML

@@ -6,6 +6,7 @@ import {
 } from "date-fns";
 import { CalEvent, Tag } from "@/types/event";
 import { nowMinutes } from "@/lib/event-utils";
+import { tagPaletteById } from "@/lib/tags";
 
 interface Props {
   events: CalEvent[];
@@ -18,26 +19,13 @@ const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const WEEKS_BEFORE = 2;  // past weeks above today's week
 const WEEKS_AFTER = 8;   // future weeks below
 
-function tagChip(tagId?: string): { bg: string; text: string; border: string; accent: string } {
-  switch (tagId) {
-    case "work":     return { bg: "#C8C3F0", text: "#2A246B", border: "#A89EE8", accent: "#534AB7" };
-    case "deepwork": return { bg: "#B0E8D4", text: "#063A2F", border: "#7DCEB4", accent: "#0F6E56" };
-    case "study":    return { bg: "#B8D8F0", text: "#08305A", border: "#8DC0E8", accent: "#185FA5" };
-    case "personal": return { bg: "#F4C0D4", text: "#5C1D32", border: "#E898B8", accent: "#993556" };
-    case "social":   return { bg: "#F8D898", text: "#4D2B05", border: "#F0BC60", accent: "#854F0B" };
-    case "health":   return { bg: "#B8ECC8", text: "#1A4D2A", border: "#7DCCA0", accent: "#3B6D11" };
-    case "errand":   return { bg: "#F0DCC8", text: "#4D2800", border: "#D8B890", accent: "#993C1D" };
-    default:         return { bg: "#E4E1DC", text: "#44403C", border: "#C8C4BE", accent: "#5F5E5A" };
-  }
-}
-
 function isHappeningNow(ev: CalEvent): boolean {
   if (!isToday(new Date(ev.date + "T00:00:00"))) return false;
   const now = nowMinutes();
   return now >= ev.start && now < ev.start + ev.duration;
 }
 
-export function MonthView({ events, onDayClick, onDayNavigate }: Props) {
+export function MonthView({ events, tags = [], onDayClick, onDayNavigate }: Props) {
   const today = startOfDay(new Date());
   const scrollRef = useRef<HTMLDivElement>(null);
   const todayRowRef = useRef<HTMLDivElement>(null);
@@ -197,6 +185,7 @@ export function MonthView({ events, onDayClick, onDayNavigate }: Props) {
                       key={dayKey}
                       day={day}
                       dayEvents={dayEvents}
+                      tags={tags}
                       isToday={todayDay}
                       isCurrentMonth={isCurrentMonthDay}
                       isLast={di === 6}
@@ -227,6 +216,7 @@ export function MonthView({ events, onDayClick, onDayNavigate }: Props) {
 interface DayCellProps {
   day: Date;
   dayEvents: CalEvent[];
+  tags: Tag[];
   isToday: boolean;
   isCurrentMonth: boolean;
   isLast: boolean;
@@ -234,7 +224,7 @@ interface DayCellProps {
   onClick: () => void;
 }
 
-function DayCell({ day, dayEvents, isToday: todayDay, isCurrentMonth, isLast, isSelected, onClick }: DayCellProps) {
+function DayCell({ day, dayEvents, tags, isToday: todayDay, isCurrentMonth, isLast, isSelected, onClick }: DayCellProps) {
   const [hovered, setHovered] = useState(false);
   const sortedEvents = [...dayEvents].sort((a, b) => a.start - b.start);
   const laneEvents = sortedEvents.slice(0, 3);
@@ -282,7 +272,7 @@ function DayCell({ day, dayEvents, isToday: todayDay, isCurrentMonth, isLast, is
       {/* Event pills */}
       <div style={{ display: "flex", flexDirection: "column", gap: 2, overflow: "hidden", flex: 1 }}>
         {laneEvents.map((ev) => {
-          const chip = tagChip(ev.tagId);
+          const chip = tagPaletteById(tags, ev.tagId);
           const isTentative = ev.tentative === true;
           const isSkipped = ev.completed === false;
           const isCompleted = ev.completed === true;

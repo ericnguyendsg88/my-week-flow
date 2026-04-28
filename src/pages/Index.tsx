@@ -112,6 +112,36 @@ const Index = () => {
   return <HorizonApp userId={userId} />;
 };
 
+function HorizonLogo({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="hl-sky" cx="50%" cy="58%" r="55%" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#FFF0CC" />
+          <stop offset="30%" stopColor="#E8CFEE" />
+          <stop offset="100%" stopColor="#C4BEED" />
+        </radialGradient>
+        <radialGradient id="hl-glow" cx="50%" cy="0%" r="100%" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#FFE8A0" stopOpacity="0.9" />
+          <stop offset="100%" stopColor="#C4BEED" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="hl-sun" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#FFD84D" />
+          <stop offset="100%" stopColor="#FFA500" />
+        </radialGradient>
+      </defs>
+      {/* Sky background */}
+      <rect width="100" height="100" fill="url(#hl-sky)" />
+      {/* Glow behind sun */}
+      <ellipse cx="50" cy="56" rx="38" ry="30" fill="url(#hl-glow)" />
+      {/* Sun — half peeking above hill */}
+      <circle cx="50" cy="58" r="14" fill="url(#hl-sun)" />
+      {/* Hill — large arc covering bottom half */}
+      <ellipse cx="50" cy="92" rx="70" ry="46" fill="#4B3FCC" />
+    </svg>
+  );
+}
+
 const HorizonApp = ({ userId }: { userId: string }) => {
   const today = startOfDay(new Date());
   const [weekWindowMode, setWeekWindowMode] = useState<"today-partial" | "today-bridge" | "calendar">("today-partial");
@@ -146,6 +176,37 @@ const HorizonApp = ({ userId }: { userId: string }) => {
   const [leftPanelWidth, setLeftPanelWidth] = useState(380);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [sidebarHovered, setSidebarHovered] = useState(false);
+  const sidebarAutoHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const SIDEBAR_AUTO_HIDE_MS = 2 * 60 * 1000; // 2 minutes
+
+  function showSidebar() {
+    if (!leftCollapsed) return;
+    setSidebarHovered(true);
+    resetAutoHideTimer();
+  }
+
+  function resetAutoHideTimer() {
+    if (sidebarAutoHideTimer.current) clearTimeout(sidebarAutoHideTimer.current);
+    sidebarAutoHideTimer.current = setTimeout(() => {
+      setSidebarHovered(false);
+    }, SIDEBAR_AUTO_HIDE_MS);
+  }
+
+  function cancelAutoHide() {
+    if (sidebarAutoHideTimer.current) clearTimeout(sidebarAutoHideTimer.current);
+  }
+
+  // When sidebar is pinned open (not collapsed), cancel any pending timer
+  useEffect(() => {
+    if (!leftCollapsed) {
+      cancelAutoHide();
+      setSidebarHovered(false);
+    }
+  }, [leftCollapsed]);
+
+  // When collapsed, reset to expanded = false on unmount
+  useEffect(() => () => { if (sidebarAutoHideTimer.current) clearTimeout(sidebarAutoHideTimer.current); }, []);
+
   // When collapsed, hovering the rail temporarily shows the full sidebar as an overlay
   const sidebarExpanded = !leftCollapsed || sidebarHovered;
   const isDragging = useRef(false);
@@ -465,81 +526,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
     : weekDates;
 
 
-  const todayEvents = events.filter((e) => e.date === todayKey);
-  const todayEventCount = todayEvents.length;
-  const todayLabel = format(today, "EEEE, MMMM d");
 
-  const timeOfDay = (() => {
-    const h = new Date().getHours();
-    return h < 12 ? "morning" : h < 17 ? "afternoon" : "evening";
-  })();
-
-  // ── Live clock ──
-  const [nowTime, setNowTime] = useState(() => format(new Date(), "h:mma").toLowerCase());
-  useEffect(() => {
-    const tick = () => setNowTime(format(new Date(), "h:mma").toLowerCase());
-    const id = setInterval(tick, 30000);
-    return () => clearInterval(id);
-  }, []);
-
-  // ── Weather ──
-  type WeatherInfo = { temp: number; emoji: string; city: string };
-  const [weather, setWeather] = useState<WeatherInfo | null>(null);
-
-  useEffect(() => {
-    const WMO_EMOJI: Record<number, string> = {
-      0: "☀️", 1: "🌤️", 2: "⛅", 3: "☁️",
-      45: "🌫️", 48: "🌫️",
-      51: "🌦️", 53: "🌦️", 55: "🌦️",
-      61: "🌧️", 63: "🌧️", 65: "🌧️",
-      71: "❄️", 73: "❄️", 75: "❄️",
-      80: "🌦️", 81: "🌦️", 82: "⛈️",
-      95: "⛈️", 96: "⛈️", 99: "⛈️",
-    };
-    const fetchWeather = async (lat: number, lon: number) => {
-      try {
-        // Reverse geocode city name
-        const geoRes = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`
-        );
-        const geoData = await geoRes.json();
-        const city =
-          geoData?.address?.city ||
-          geoData?.address?.town ||
-          geoData?.address?.village ||
-          geoData?.address?.county ||
-          "";
-
-        // Get current weather
-        const wxRes = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&temperature_unit=celsius`
-        );
-        const wxData = await wxRes.json();
-        const cw = wxData?.current_weather;
-        if (!cw) return;
-        const code = cw.weathercode as number;
-        const emoji = WMO_EMOJI[code] ?? "🌡️";
-        setWeather({ temp: Math.round(cw.temperature), emoji, city });
-      } catch { /* silently ignore */ }
-    };
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => fetchWeather(pos.coords.latitude, pos.coords.longitude),
-        () => { /* permission denied — no weather shown */ }
-      );
-    }
-    // Refresh every 10 minutes
-    const id = setInterval(() => {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => fetchWeather(pos.coords.latitude, pos.coords.longitude),
-          () => {}
-        );
-      }
-    }, 600000);
-    return () => clearInterval(id);
-  }, []);
 
   const handleWeekBack = useCallback(() => {
     if (weekWindowMode === "today-partial") {
@@ -613,8 +600,9 @@ const HorizonApp = ({ userId }: { userId: string }) => {
       {/* ── LEFT PANEL ── */}
       <div
         className="flex flex-col overflow-hidden"
-        onMouseEnter={() => { if (leftCollapsed) setSidebarHovered(true); }}
-        onMouseLeave={() => setSidebarHovered(false)}
+        onMouseEnter={() => showSidebar()}
+        onMouseMove={() => { if (leftCollapsed && sidebarHovered) resetAutoHideTimer(); }}
+        onMouseLeave={() => { if (leftCollapsed) resetAutoHideTimer(); }}
         style={
           isMobile
             ? {
@@ -644,17 +632,8 @@ const HorizonApp = ({ userId }: { userId: string }) => {
         {leftCollapsed && !sidebarHovered && (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "14px 0", gap: 2, flex: 1 }}>
             {/* Logo mark */}
-            <div style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: "linear-gradient(135deg, #6C63D5 0%, #4B41B8 100%)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 2px 8px rgba(75,65,184,0.28)",
-              marginBottom: 14, flexShrink: 0,
-            }}>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M8 2L14 6V10L8 14L2 10V6L8 2Z" stroke="rgba(255,255,255,0.9)" strokeWidth="1.4" strokeLinejoin="round"/>
-                <circle cx="8" cy="8" r="2" fill="rgba(255,255,255,0.85)"/>
-              </svg>
+            <div style={{ width: 36, height: 36, borderRadius: 10, overflow: "hidden", marginBottom: 14, flexShrink: 0, boxShadow: "0 2px 8px rgba(75,65,184,0.28)" }}>
+              <HorizonLogo size={36} />
             </div>
             {([
               { Icon: CalendarRange, id: "week" as const, label: "Week" },
@@ -703,11 +682,8 @@ const HorizonApp = ({ userId }: { userId: string }) => {
             {/* ── App Logo + Title ── */}
             <div style={{ padding: "20px 20px 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 34, height: 34, borderRadius: 10, background: "linear-gradient(135deg, #6C63D5 0%, #4B41B8 100%)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(75,65,184,0.28)", flexShrink: 0 }}>
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M8 2L14 6V10L8 14L2 10V6L8 2Z" stroke="rgba(255,255,255,0.9)" strokeWidth="1.4" strokeLinejoin="round"/>
-                    <circle cx="8" cy="8" r="2" fill="rgba(255,255,255,0.85)"/>
-                  </svg>
+                <div style={{ width: 34, height: 34, borderRadius: 10, overflow: "hidden", flexShrink: 0, boxShadow: "0 2px 8px rgba(75,65,184,0.28)" }}>
+                  <HorizonLogo size={34} />
                 </div>
                 <span style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Lora', Georgia, serif", color: "#1A1816", letterSpacing: "-0.02em" }}>Horizon</span>
               </div>
@@ -761,91 +737,8 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                 })}
               </div>
 
-              <div style={{ height: 1, background: "#EDE9E4", margin: "8px 0" }} />
-
-              {/* ── CAPTURE section ── */}
+              {/* ── Backpack composer + items ── */}
               <div style={{ marginBottom: 6 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", color: "#B8B4AE", textTransform: "uppercase", padding: "0 8px", marginBottom: 4 }}>Capture</div>
-                <button style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 10, border: "none", background: "transparent", color: "#6B6460", cursor: "pointer", fontSize: 13, fontWeight: 500, transition: "all 0.13s", textAlign: "left", marginBottom: 1 }}
-                  onMouseEnter={e => { e.currentTarget.style.background = "#F3F0EC"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-                >
-                  <CheckSquare size={15} strokeWidth={1.8} style={{ flexShrink: 0, color: "#9B9590" }} />
-                  Backpack
-                  {unplaced > 0 && <span style={{ marginLeft: "auto", background: "#7B73D6", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 20, padding: "1px 6px", flexShrink: 0 }}>{unplaced} new</span>}
-                </button>
-                <button style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 10, border: "none", background: "transparent", color: "#6B6460", cursor: "pointer", fontSize: 13, fontWeight: 500, transition: "all 0.13s", textAlign: "left" }}
-                  onMouseEnter={e => { e.currentTarget.style.background = "#F3F0EC"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-                >
-                  <Sparkles size={15} strokeWidth={1.8} style={{ flexShrink: 0, color: "#9B9590" }} />
-                  Floating thoughts
-                  {allCaptures.filter(c => !c.dayKey).length > 0 && <span style={{ marginLeft: "auto", background: "#F0DCC8", color: "#6B3A10", fontSize: 9, fontWeight: 700, borderRadius: 20, padding: "1px 6px", flexShrink: 0 }}>{allCaptures.filter(c => !c.dayKey).length}</span>}
-                </button>
-              </div>
-
-              <div style={{ height: 1, background: "#EDE9E4", margin: "8px 0" }} />
-
-              {/* ── QUICK ADD section ── */}
-              <div style={{ marginBottom: 6 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", color: "#B8B4AE", textTransform: "uppercase", padding: "0 8px", marginBottom: 8 }}>Quick Add</div>
-                <div style={{ padding: "0 4px" }}>
-                  <TaskComposer weekDates={weekDates} events={events} tags={tags} onCommit={handleCommit} prefill={composerPrefill} />
-                </div>
-              </div>
-
-              <div style={{ height: 1, background: "#EDE9E4", margin: "8px 0" }} />
-
-              {/* ── THIS WEEK / TODAY'S CAPTURES ── */}
-              <div style={{ marginBottom: 6 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", color: "#B8B4AE", textTransform: "uppercase", padding: "0 8px", marginBottom: 8 }}>This Week</div>
-                <div style={{ background: "#F5F3FF", border: "1px solid #DDD8F8", borderRadius: 14, padding: "12px 14px" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#534AB7", letterSpacing: "0.03em", textTransform: "uppercase" }}>Today's Captures</span>
-                    <span style={{ fontSize: 10, color: "#8B83D4", fontWeight: 500, cursor: "pointer" }}>see all →</span>
-                  </div>
-                  {(() => {
-                    const todayCaps = allCaptures.filter(c => c.dayKey === todayKey).slice(0, 4);
-                    if (todayCaps.length === 0) return <div style={{ fontSize: 11, color: "#A89ED8", fontStyle: "italic", textAlign: "center", padding: "8px 0" }}>No captures yet today</div>;
-                    return todayCaps.map(cap => (
-                      <div
-                        key={cap.id}
-                        draggable
-                        onDragStart={e => {
-                          e.dataTransfer.setData("text/capture-json", JSON.stringify(cap));
-                          e.dataTransfer.effectAllowed = "copy";
-                        }}
-                        style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5, cursor: "grab", borderRadius: 7, padding: "2px 4px", transition: "background 0.1s" }}
-                        onMouseEnter={e => { e.currentTarget.style.background = "#EDE8FC"; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-                      >
-                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#8B83D4", flexShrink: 0 }} />
-                        <span style={{ fontSize: 11, color: "#3C3489", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cap.title}</span>
-                        <span style={{ marginLeft: "auto", fontSize: 9, color: "#B0A8D4", flexShrink: 0 }}>drag →</span>
-                      </div>
-                    ));
-                  })()}
-                  <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid #DDD8F8", display: "flex", gap: 12 }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                      <span style={{ fontSize: 16, fontWeight: 700, color: "#3C3489", lineHeight: 1 }}>{todayEvents.filter(e => e.completed).length}</span>
-                      <span style={{ fontSize: 9, color: "#8B83D4", fontWeight: 500, letterSpacing: "0.04em", textTransform: "uppercase" }}>Done</span>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                      <span style={{ fontSize: 16, fontWeight: 700, color: "#3C3489", lineHeight: 1 }}>{todayEventCount}</span>
-                      <span style={{ fontSize: 9, color: "#8B83D4", fontWeight: 500, letterSpacing: "0.04em", textTransform: "uppercase" }}>Events</span>
-                    </div>
-                    {weather && (
-                      <div style={{ marginLeft: "auto", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
-                        <span style={{ fontSize: 14, lineHeight: 1 }}>{weather.emoji}</span>
-                        <span style={{ fontSize: 9, color: "#8B83D4", fontWeight: 500 }}>{weather.temp}°C</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Backpack panel (inline) ── */}
-              <div style={{ marginTop: 8 }}>
                 <Backpack
                   selectedDayKey={selectedDayKey}
                   dayEvents={events.filter((e) => e.date === selectedDayKey)}
@@ -853,6 +746,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                   onCreateEventFromItem={handleCreateEventFromItem}
                 />
               </div>
+
             </div>
 
             {/* ── Bottom: Profile + Settings + Export/Import ── */}
@@ -1061,24 +955,6 @@ const HorizonApp = ({ userId }: { userId: string }) => {
               >
                 <EyeOff size={13} strokeWidth={2} />
                 {privacyMode ? "show" : "hide"}
-              </button>
-            )}
-
-            {/* Compact toggle */}
-            {viewMode !== "month" && (
-              <button
-                onClick={() => setCompactMode((v) => !v)}
-                title={compactMode ? "Expand events" : "Compact view"}
-                style={{
-                  width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-                  background: compactMode ? "#7B73D6" : "#fff",
-                  border: compactMode ? "1px solid #7B73D6" : "1px solid #EAEAEA",
-                  color: compactMode ? "#fff" : "#3C3489",
-                  cursor: "pointer",
-                  transition: "all 0.15s",
-                }}
-              >
-                <EyeOff size={14} strokeWidth={2} />
               </button>
             )}
 

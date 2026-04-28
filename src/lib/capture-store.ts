@@ -39,7 +39,13 @@ export async function syncCapturesFromRemote(userId: string) {
   if (!remote) return;
   const remoteIds = new Set(remote.map((c) => c.id));
   const localOnly = store.filter((c) => !remoteIds.has(c.id));
-  store = [...remote, ...localOnly];
+  // Merge: preserve og* fields from local items (they are not stored in the DB)
+  const merged = remote.map((remoteItem) => {
+    const local = store.find((x) => x.id === remoteItem.id);
+    if (!local) return remoteItem;
+    return { ...remoteItem, ogTitle: local.ogTitle, ogDescription: local.ogDescription, ogImage: local.ogImage, ogSite: local.ogSite };
+  });
+  store = [...merged, ...localOnly];
   save(store);
   listeners.forEach((l) => l());
 }
@@ -48,7 +54,11 @@ export async function syncCapturesFromRemote(userId: string) {
 export function applyRemoteCapture(c: CaptureItem) {
   const idx = store.findIndex((x) => x.id === c.id);
   if (idx === -1) store = [c, ...store];
-  else store = store.map((x) => (x.id === c.id ? c : x));
+  else store = store.map((x) => {
+    if (x.id !== c.id) return x;
+    // og* fields are local-only (not in DB schema) — preserve them from the existing item
+    return { ...c, ogTitle: x.ogTitle, ogDescription: x.ogDescription, ogImage: x.ogImage, ogSite: x.ogSite };
+  });
   save(store);
   listeners.forEach((l) => l());
 }
