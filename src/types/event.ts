@@ -115,6 +115,8 @@ export interface CaptureItem {
   ogImage?: string;
   ogSite?: string;
   ogLoading?: boolean;
+  // user's own note on this item
+  note?: string;
 }
 
 export const DURATIONS = [15, 30, 45, 60, 90, 120];

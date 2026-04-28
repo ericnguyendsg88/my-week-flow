@@ -108,6 +108,7 @@ interface Props {
   onCopyEvent?: (event: CalEvent) => void;
   onSelectEvent?: (event: CalEvent | null) => void;
   onDayClick?: (date: Date) => void;
+  onOpenDayBoard?: (date: Date) => void;
   isSelected?: boolean;
   focusMode?: boolean;
   compact?: boolean;
@@ -127,6 +128,10 @@ const PX_PER_MIN_LATE   = 1 / 3;  // ~20px/hr
 const TIMELINE_HEIGHT =
   LATE_START * PX_PER_MIN_NORMAL +
   (DAY_END - LATE_START) * PX_PER_MIN_LATE;
+
+// Early morning zone (12am–6am) — collapsed by default
+const EARLY_END_MINS   = 6 * 60;  // 6am
+const EARLY_COLLAPSED_H = 28;     // px height of the collapsed pill
 
 function timeToY(mins: number): number {
   const clamped = Math.max(0, mins);
@@ -198,6 +203,135 @@ const STICKER_COLORS: Record<string, { bg: string; border: string; text: string 
   ref:     { bg: "#FCE4EC", border: "#F48FB1", text: "#6A0F2E" },
   file:    { bg: "#F3E5F5", border: "#BA68C8", text: "#4A148C" },
 };
+
+const DECK_VISIBLE = 3; // how many fanned cards to show when collapsed
+
+function StickerDeck({ stickers, onPeel, onOpenBoard }: { stickers: CaptureItem[]; onPeel: (id: string) => void; onOpenBoard?: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (expanded) {
+    return (
+      <div style={{ width: "100%", marginTop: 4 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
+          {stickers.map((s, i) => (
+            <StickerNote key={s.id} item={s} index={i} onPeel={() => onPeel(s.id)} />
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 4, justifyContent: "center", marginTop: 6 }}>
+          {onOpenBoard && (
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); onOpenBoard(); }}
+              style={{ fontSize: 9, fontWeight: 600, color: "#fff", background: "#3C3489", border: "none", borderRadius: 10, padding: "3px 8px", cursor: "pointer", letterSpacing: "0.03em" }}
+            >
+              board view ↗
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); setExpanded(false); }}
+            style={{ fontSize: 9, fontWeight: 600, color: "#A8A4A0", background: "none", border: "none", cursor: "pointer", letterSpacing: "0.04em" }}
+          >
+            ▲ collapse
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Collapsed: offset stack — each card shifts right+down, no rotation
+  const shown = stickers.slice(0, DECK_VISIBLE);
+  const deckW = 68;
+  const deckH = 80;
+  const DX = 6;  // px shift right per card behind
+  const DY = 5;  // px shift down per card behind
+  const containerW = deckW + (shown.length - 1) * DX + 8;
+  const containerH = deckH + (shown.length - 1) * DY + 8;
+
+  return (
+    <div
+      style={{ width: "100%", marginTop: 4, display: "flex", flexDirection: "column", alignItems: "center", gap: 0 }}
+    >
+      {/* Offset stack — click opens board view if available, else expands inline */}
+      <div
+        style={{ position: "relative", width: containerW, height: containerH, cursor: "pointer" }}
+        title={`${stickers.length} item${stickers.length !== 1 ? "s" : ""} — click to open board`}
+        onClick={e => { e.stopPropagation(); if (onOpenBoard) onOpenBoard(); else setExpanded(true); }}
+      >
+        {/* Render back-to-front: last index = backmost */}
+        {[...shown].reverse().map((s, ri) => {
+          const i = shown.length - 1 - ri; // 0 = front card
+          const sc = STICKER_COLORS[s.kind] ?? STICKER_COLORS.task;
+          return (
+            <div
+              key={s.id}
+              style={{
+                position: "absolute",
+                top: 4 + i * DY,
+                left: 4 + i * DX,
+                width: deckW,
+                height: deckH,
+                background: sc.bg,
+                border: `1.5px solid ${sc.border}`,
+                borderRadius: 12,
+                padding: "10px 10px 8px",
+                boxShadow: i === 0
+                  ? "0 4px 14px rgba(0,0,0,0.14), 0 1px 4px rgba(0,0,0,0.08)"
+                  : "0 2px 6px rgba(0,0,0,0.08)",
+                zIndex: shown.length - i,
+                boxSizing: "border-box",
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+              }}
+            >
+              {i === 0 && (
+                <>
+                  <div style={{ fontSize: 13, lineHeight: 1 }}>
+                    {s.kind === "task" ? "☐" : s.kind === "link" ? "🔗" : s.kind === "thought" ? "💭" : s.kind === "ref" ? "📌" : "📄"}
+                  </div>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: sc.text, lineHeight: 1.35, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" }}>
+                    {s.title}
+                  </span>
+                  <span style={{ fontSize: 8, color: sc.text, opacity: 0.45, marginTop: "auto", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    {s.kind}
+                  </span>
+                </>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Count badge */}
+        {stickers.length > 0 && (
+          <div style={{
+            position: "absolute",
+            bottom: 0,
+            right: 0,
+            background: "#3C3489",
+            color: "#fff",
+            fontSize: 9,
+            fontWeight: 700,
+            borderRadius: 12,
+            width: 20,
+            height: 20,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 20,
+            boxShadow: "0 1px 4px rgba(0,0,0,0.28)",
+          }}>
+            {stickers.length}
+          </div>
+        )}
+      </div>
+
+      {/* Hint */}
+      <span style={{ fontSize: 8, color: "#C8C4BE", marginTop: 4, letterSpacing: "0.04em" }}>{onOpenBoard ? "tap to open board" : "tap to expand"}</span>
+    </div>
+  );
+}
 
 function StickerNote({ item, index, onPeel }: { item: CaptureItem; index: number; onPeel: () => void }) {
   const [hovered, setHovered] = useState(false);
@@ -369,7 +503,7 @@ function TaskPill({ task, tags, timelineRef, onDelete }: { task: CaptureItem; ta
   );
 }
 
-export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete, onResize, onUpdate, onCreate, onMoveToDay, onCopyEvent, onSelectEvent, onDayClick, isSelected, focusMode, compact, privacyMode }: Props) {
+export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete, onResize, onUpdate, onCreate, onMoveToDay, onCopyEvent, onSelectEvent, onDayClick, onOpenDayBoard, isSelected, focusMode, compact, privacyMode }: Props) {
   const isT = isToday(date);
   const isTom = isTomorrow(date);
   const isWeekend = date.getDay() === 0 || date.getDay() === 6;
@@ -378,6 +512,9 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
   const [dayType, setDayType] = useDayType(dateKey);
   const [stickers, setStickers] = useState<CaptureItem[]>(() => loadStickers()[dateKey] ?? []);
   const [headerDragOver, setHeaderDragOver] = useState(false);
+  const [earlyExpanded, setEarlyExpanded] = useState(false);
+  // px scrolled away at the top when the early zone is collapsed
+  const earlyHiddenPx = earlyExpanded ? 0 : Math.max(0, timeToY(EARLY_END_MINS) - EARLY_COLLAPSED_H);
   const [showTypePicker, setShowTypePicker] = useState(false);
   const [pickerPos, setPickerPos] = useState({ top: 0, left: 0 });
   const [dayTypeDefs, setDayTypeDefs] = useState(() => loadCustomDayTypeDefs());
@@ -457,7 +594,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
     subColor = dayTypeDef ? dayTypeDef.text : "#3B6D11";
   } else if (isSelected) {
     bg = "#FFFFFF";
-    headerBg = dayTypeDef ? dayTypeDef.headerBg : "transparent";
+    headerBg = dayTypeDef ? dayTypeDef.headerBg : "#EEEDFE";
     const selColor = dayTypeDef ? dayTypeDef.border : "#C8C4BE";
     border = `1.5px solid ${selColor}`;
     titleColor = dayTypeDef ? dayTypeDef.text : "#444441";
@@ -466,6 +603,12 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
     bg = "#FFFFFF";
     headerBg = "#FAFAFA";
     border = "0.5px solid #E5E4E0";
+  } else if (dayTypeDef) {
+    bg = "#FFFFFF";
+    headerBg = dayTypeDef.headerBg;
+    border = `0.5px solid ${dayTypeDef.border}`;
+    titleColor = dayTypeDef.text;
+    subColor = dayTypeDef.text;
   }
 
   const sorted = [...events].sort((a, b) => a.start - b.start);
@@ -632,7 +775,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
 
     // How far into the bubble the user clicked (in minutes) — keeps bubble anchored to cursor
     const cursorY = ev.clientY - timelineRect.top;
-    const cursorMins = yToTime(cursorY);
+    const cursorMins = yToTime(cursorY + earlyHiddenPx);
     const cursorOffsetMins = Math.max(0, cursorMins - event.start);
 
     let dragging = false;
@@ -660,7 +803,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
       }
 
       // Vertical: map cursor Y → time, subtract intra-bubble offset so top of bubble tracks correctly
-      const rawMins = yToTime(relY) - moveDragRef.current.cursorOffsetMins;
+      const rawMins = yToTime(relY + earlyHiddenPx) - moveDragRef.current.cursorOffsetMins;
       const snapped = snapStart(rawMins);
       const clamped = Math.max(DAY_START, Math.min(DAY_END - event.duration, snapped));
       setLiveStart(clamped);
@@ -679,7 +822,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
       if (dragging && moveDragRef.current && timelineRect) {
         const relY = e.clientY - timelineRect.top;
 
-        const rawMins = yToTime(relY) - moveDragRef.current.cursorOffsetMins;
+        const rawMins = yToTime(relY + earlyHiddenPx) - moveDragRef.current.cursorOffsetMins;
         const snapped = snapStart(rawMins);
         const clamped = Math.max(DAY_START, Math.min(DAY_END - event.duration, snapped));
 
@@ -706,10 +849,12 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
   const [isDragOver, setIsDragOver] = useState(false);
 
   function handleDragOver(e: React.DragEvent) {
-    if (!onMoveToDay) return;
-    if (!e.dataTransfer.types.includes("text/event-id")) return;
+    const hasEvent = e.dataTransfer.types.includes("text/event-id");
+    const hasCapture = e.dataTransfer.types.includes("text/capture-json");
+    if (!hasEvent && !hasCapture) return;
+    if (hasEvent && !onMoveToDay) return;
     e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
+    e.dataTransfer.dropEffect = hasEvent ? "move" : "copy";
     setIsDragOver(true);
   }
 
@@ -722,8 +867,18 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
     e.preventDefault();
     setIsDragOver(false);
     const eventId = e.dataTransfer.getData("text/event-id");
-    const newDate = format(date, "yyyy-MM-dd");
-    if (eventId) onMoveToDay?.(eventId, newDate);
+    if (eventId) {
+      onMoveToDay?.(eventId, format(date, "yyyy-MM-dd"));
+      return;
+    }
+    const raw = e.dataTransfer.getData("text/capture-json");
+    if (raw) {
+      try {
+        const item: CaptureItem = JSON.parse(raw);
+        addSticker(dateKey, item);
+        setStickers(loadStickers()[dateKey] ?? []);
+      } catch {}
+    }
   }
 
   // ── drag-to-create state ──
@@ -741,7 +896,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
 
   function getRelativeY(clientY: number) {
     const rect = timelineRef.current?.getBoundingClientRect();
-    return rect ? clientY - rect.top : 0;
+    return rect ? clientY - rect.top + earlyHiddenPx : 0;
   }
 
   function handleTimelineMouseDown(e: React.MouseEvent) {
@@ -1065,7 +1220,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
     <div style={{
       flex: 1,
       background: bg,
-      borderTop: stripColor ? `3px solid ${stripColor}` : border,
+      borderTop: "none",
       borderRight: border,
       borderBottom: border,
       borderLeft: border,
@@ -1077,6 +1232,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
       position: "relative",
       opacity: colOpacity,
       boxShadow: isT ? "0 0 0 0" : "none",
+      overflow: "clip",
     }}>
       {/* Header — centered layout, also drop zone for stickers */}
       <div
@@ -1088,7 +1244,15 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
           outline: headerDragOver ? "2px dashed #7B73D6" : "none",
           outlineOffset: -3,
           transition: "background 0.15s, outline 0.1s",
-          position: "relative",
+          position: "sticky",
+          top: 0,
+          zIndex: 30,
+          borderTop: stripColor ? `3px solid ${stripColor}` : border,
+          borderLeft: border,
+          borderRight: border,
+          marginLeft: -1,
+          marginRight: -1,
+          boxShadow: "0 4px 8px -2px rgba(0,0,0,0.07)",
         }}
         onClick={() => onDayClick?.(date)}
         onDragOver={handleHeaderDragOver}
@@ -1144,13 +1308,9 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
           }
         </button>
 
-        {/* Stickers — sticky notes on the header */}
+        {/* Stickers — stacked deck, expand on click */}
         {stickers.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginTop: 4, width: "100%" }}>
-            {stickers.map((s, i) => (
-              <StickerNote key={s.id} item={s} index={i} onPeel={() => peelSticker(s.id)} />
-            ))}
-          </div>
+          <StickerDeck stickers={stickers} onPeel={peelSticker} onOpenBoard={onOpenDayBoard ? () => onOpenDayBoard(date) : undefined} />
         )}
       </div>
 
@@ -1230,19 +1390,51 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         style={{
-          position: "relative", height: TIMELINE_HEIGHT, margin: "0 4px",
+          position: "relative", height: TIMELINE_HEIGHT - earlyHiddenPx, margin: "0 4px",
           cursor: onCreate ? "crosshair" : "default",
           outline: isDragOver ? "2px dashed #7B73D6" : "none",
           outlineOffset: 2,
           borderRadius: 8,
-          transition: "outline 0.1s",
-          overflow: "visible",
+          transition: "outline 0.1s, height 0.25s ease",
+          overflow: "hidden",
         }}
       >
+        {/* Early-hours collapse/expand toggle */}
+        <button
+          type="button"
+          onClick={() => setEarlyExpanded(x => !x)}
+          style={{
+            position: "absolute",
+            top: earlyExpanded ? timeToY(EARLY_END_MINS) - EARLY_COLLAPSED_H : 0,
+            left: 0, right: 0,
+            height: EARLY_COLLAPSED_H,
+            zIndex: 30,
+            background: earlyExpanded ? "transparent" : "rgba(237,233,224,0.65)",
+            border: "none",
+            borderBottom: earlyExpanded ? "none" : "1px dashed #DED9D2",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 4,
+            fontSize: 9,
+            fontWeight: 600,
+            color: earlyExpanded ? "#C8C4BE" : "#A8A4A0",
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            transition: "top 0.25s ease, background 0.2s",
+          }}
+        >
+          {earlyExpanded ? "▲ collapse" : "12am – 6am ↓"}
+        </button>
+        {/* Inner content — shifted up by earlyHiddenPx to collapse the early zone */}
+        <div style={{ position: "absolute", top: -earlyHiddenPx, left: 0, right: 0, height: TIMELINE_HEIGHT, transition: "top 0.25s ease" }}>
         {/* Hour grid lines & markers */}
         {Array.from({ length: DAY_HOURS + 1 }, (_, i) => i).map((i) => {
           const hour = DAY_START / 60 + i;
           const h24 = hour % 24; // midnight wraps to 0
+          // Skip early morning hours (midnight–5am) — nothing useful there
+          if (h24 >= 0 && h24 < 6) return null;
           const isPM = h24 >= 12;
           const hour12 = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
           return (
@@ -1459,10 +1651,12 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
           const displayLane = isMoving ? liveLane : layout.lane;
           const displayTotalLanes = isMoving ? liveTotalLanes : layout.totalLanes;
 
-          // Side-by-side layout: divide column width equally among overlapping events
-          const GAP = 2; // px gap between adjacent event columns
-          const leftCalc = `calc(${(displayLane / displayTotalLanes) * 100}% + ${GAP}px)`;
-          const widthCalc = `calc(${(1 / displayTotalLanes) * 100}% - ${GAP * 2}px)`;
+          // Cascade layout: events overlap with a small left nudge per lane so each
+          // still gets most of the column width for readable text.
+          const GAP = 3;    // outer margin px
+          const INDENT = 13; // px nudge per lane
+          const leftCalc = `calc(${displayLane * INDENT}px + ${GAP}px)`;
+          const widthCalc = `calc(100% - ${displayLane * INDENT + GAP * 2}px)`;
 
           return (
             <div
@@ -1497,6 +1691,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
                 onCopy={onCopyEvent}
                 onSelect={onSelectEvent}
                 isResizing={isResizing || isMoving}
+                stacked={displayLane > 0}
               />
 
               {/* Live tooltip while moving — shows time + lane indicator */}
@@ -1634,6 +1829,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
             <NowMarker />
           </div>
         )}
+        </div>{/* end inner content wrapper */}
       </div>
 
       {creationPanel}

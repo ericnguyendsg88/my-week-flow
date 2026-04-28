@@ -110,6 +110,7 @@ interface Props {
   onSelect?: (event: CalEvent | null) => void;
   isResizing?: boolean;
   compact?: boolean;
+  stacked?: boolean;
 }
 
 // ── Spending helpers ──────────────────────────────────────────────
@@ -131,7 +132,7 @@ function totalSpendings(spendings: SpendingRecord[]) {
     .join(" + ");
 }
 
-export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, onSelect, isResizing, compact = false }: Props) {
+export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, onSelect, isResizing, compact = false, stacked = false }: Props) {
   const tag = tags ? getTag(tags, event.tagId) : undefined;
   const colors = tagPaletteById(tags ?? [], tag?.id ?? event.tagId);
   const [showDetail, setShowDetail] = useState(false);
@@ -878,6 +879,8 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
           position: "relative",
           border: isTentative && !isCompleted && !isSkipped
             ? "2px dashed #534AB7"
+            : stacked
+            ? "2px solid rgba(255,255,255,0.70)"
             : "none",
           opacity: isSkipped ? 0.72 : 1,
           userSelect: "none",

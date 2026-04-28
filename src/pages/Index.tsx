@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   addDays,
@@ -22,6 +22,7 @@ import { SettingsModal, loadCustomTags, saveCustomTags, loadSidebarShortcut, sav
 import { TaskComposer } from "@/components/TaskComposer";
 import { DayColumn } from "@/components/DayColumn";
 import { Backpack } from "@/components/Backpack";
+import { DayBoard } from "@/components/DayBoard";
 
 import { MonthView } from "@/components/MonthView";
 import { AnalogClock } from "@/components/AnalogClock";
@@ -422,6 +423,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
   const allCaptures = useCaptures();
   const [compactMode, setCompactMode] = useState(false);
   const [privacyMode, setPrivacyMode] = useState(false);
+  const [dayBoardDate, setDayBoardDate] = useState<Date | null>(null);
   const sync = useSyncStatus();
 
   // ── Left panel date navigation ──
@@ -579,9 +581,12 @@ const HorizonApp = ({ userId }: { userId: string }) => {
     setWeekWindowMode("calendar");
   }, [currentWeekStart, nextCalendarWeekStart, prevPartialStart, today, weekWindowMode]);
 
+  const [colWidthsResetKey, setColWidthsResetKey] = useState(0);
+
   const handleWeekToday = useCallback(() => {
     setCurrentWeekStart(today);
     setWeekWindowMode("today-partial");
+    setColWidthsResetKey(k => k + 1);
   }, [today]);
 
   return (
@@ -690,10 +695,18 @@ const HorizonApp = ({ userId }: { userId: string }) => {
               <button
                 onClick={() => { setLeftCollapsed(true); setSidebarHovered(false); }}
                 title="Collapse sidebar"
-                style={{ width: 28, height: 28, borderRadius: 8, background: "transparent", border: "none", color: "#B0ACA6", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, transition: "all 0.15s" }}
+                style={{ width: 28, height: 28, borderRadius: 8, background: "transparent", border: "none", color: "#B0ACA6", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}
                 onMouseEnter={e => { e.currentTarget.style.background = "#F0EDE8"; e.currentTarget.style.color = "#6B6460"; }}
                 onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#B0ACA6"; }}
-              >‹</button>
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="1" y="1" width="14" height="14" rx="2.5" stroke="currentColor" strokeWidth="1.4" fill="none"/>
+                  <line x1="5.5" y1="1.7" x2="5.5" y2="14.3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                  <line x1="8" y1="5.5" x2="12" y2="5.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                  <line x1="8" y1="8" x2="12" y2="8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                  <line x1="8" y1="10.5" x2="12" y2="10.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                </svg>
+              </button>
             </div>
 
             {/* Analog clock in focus mode */}
@@ -893,7 +906,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                   style={{ background: "#fff", border: "1px solid #EAEAEA", borderRadius: 16, padding: "0 12px", height: 32, cursor: "pointer", fontSize: 12, fontWeight: 500, color: "#3C3489" }}>Today</button>
                 <button
                   onClick={viewMode === "focus"
-                    ? () => { const d = addDays(focusDate, 1); setFocusDate(d); setSelectedDate(d); }
+                    ? () => { setViewMode("week"); }
                     : handleWeekForward}
                   style={{ background: "#fff", border: "1px solid #EAEAEA", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#3C3489" }}>→</button>
               </div>
@@ -929,14 +942,6 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                 : sync.status === "syncing" ? "syncing…"
                 : "not synced"}
             </div>
-
-            {unplaced > 0 && (
-              <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                style={{ display: "flex", alignItems: "center", gap: 6, background: "#E8EDFD", borderRadius: 20, padding: "5px 12px", fontSize: 12, fontWeight: 500, color: "#3D68CC" }}>
-                <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#3D68CC", display: "inline-block" }} />
-                {unplaced} unplaced
-              </motion.div>
-            )}
 
             {/* Privacy toggle */}
             {viewMode !== "month" && (
@@ -1113,6 +1118,8 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                   privacyMode={privacyMode}
                   focusMode={viewMode === "focus"}
                   selectedDayKey={selectedDayKey}
+                  resetWidths={colWidthsResetKey}
+                  onOpenDayBoard={setDayBoardDate}
                   onDayClick={(date) => {
                     const dateKey = format(date, "yyyy-MM-dd");
                     if (viewMode === "focus") {
@@ -1159,6 +1166,15 @@ const HorizonApp = ({ userId }: { userId: string }) => {
           </div>
         )}
       </div>
+
+      {/* Day Board overlay */}
+      {dayBoardDate && (
+        <DayBoard
+          date={dayBoardDate}
+          onClose={() => setDayBoardDate(null)}
+          onNavigate={setDayBoardDate}
+        />
+      )}
 
       {/* Completion Prompt */}
       <AnimatePresence>
@@ -1327,7 +1343,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
 };
 
 /* ── Week Grid ── */
-function WeekGrid({ weekDates, events, tags, allCaptures, onMark, onDelete, onResize, onUpdate, onCreate, onMoveToDay, onCopyEvent, onSelectEvent, compact, privacyMode, focusMode, selectedDayKey, onDayClick }: {
+function WeekGrid({ weekDates, events, tags, allCaptures, onMark, onDelete, onResize, onUpdate, onCreate, onMoveToDay, onCopyEvent, onSelectEvent, compact, privacyMode, focusMode, selectedDayKey, onDayClick, onOpenDayBoard, resetWidths }: {
   weekDates: Date[];
   events: CalEvent[];
   tags: Tag[];
@@ -1345,37 +1361,100 @@ function WeekGrid({ weekDates, events, tags, allCaptures, onMark, onDelete, onRe
   focusMode?: boolean;
   selectedDayKey?: string;
   onDayClick?: (date: Date) => void;
+  onOpenDayBoard?: (date: Date) => void;
+  resetWidths?: number; // increment to trigger reset
 }) {
   const START_HOUR = 0;
   const END_HOUR = 24;
+  const n = weekDates.length;
+
+  // null = equal flex (default); array = per-column pixel widths (after user resizes)
+  const [colPxWidths, setColPxWidths] = useState<number[] | null>(null);
+
+  // Reset to equal flex when weekDates count changes or parent resets
+  useEffect(() => { setColPxWidths(null); }, [n, resetWidths]);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  function startColResize(e: React.MouseEvent, idx: number) {
+    e.preventDefault();
+    // Snapshot current rendered widths from DOM
+    const wrappers = containerRef.current?.querySelectorAll<HTMLDivElement>("[data-col-wrapper]");
+    if (!wrappers || wrappers.length === 0) return;
+    const snapshot = Array.from(wrappers).map(w => w.offsetWidth);
+    const startX = e.clientX;
+    const origWidth = snapshot[idx];
+
+    function onMove(mv: MouseEvent) {
+      const dx = mv.clientX - startX;
+      const next = [...snapshot];
+      next[idx] = Math.max(100, origWidth + dx);
+      setColPxWidths(next);
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
 
   return (
     <div className="flex w-full min-h-0 flex-1 overflow-auto scrollbar-hidden">
       <TimeGutter startHour={START_HOUR} endHour={END_HOUR} />
-      <div className="flex min-w-0 flex-1" style={{ gap: 8 }}>
-        {weekDates.map((d) => {
+      <div ref={containerRef} className="flex" style={{ gap: 0, minWidth: colPxWidths ? colPxWidths.reduce((a, b) => a + b, 0) + (n - 1) * 8 : undefined, flex: colPxWidths ? undefined : 1 }}>
+        {weekDates.map((d, i) => {
           const dateKey = format(d, "yyyy-MM-dd");
           return (
-            <DayColumn
-              key={d.toISOString()}
-              date={d}
-              events={events.filter((e) => e.date === dateKey)}
-              tags={tags}
-              taskItems={allCaptures.filter((c) => c.kind === "task" && c.dayKey === dateKey && c.start !== undefined)}
-              onMark={onMark}
-              onDelete={onDelete}
-              onResize={onResize}
-              onUpdate={onUpdate}
-              onCreate={onCreate}
-              onMoveToDay={onMoveToDay}
-              onCopyEvent={onCopyEvent}
-              onSelectEvent={onSelectEvent}
-              compact={compact}
-              privacyMode={privacyMode}
-              focusMode={focusMode}
-              isSelected={dateKey === selectedDayKey}
-              onDayClick={onDayClick}
-            />
+            <Fragment key={d.toISOString()}>
+              <div
+                data-col-wrapper
+                style={colPxWidths
+                  ? { width: colPxWidths[i], flexShrink: 0 }
+                  : { flex: 1, minWidth: 120 }
+                }
+              >
+                <DayColumn
+                  date={d}
+                  events={events.filter((e) => e.date === dateKey)}
+                  tags={tags}
+                  taskItems={allCaptures.filter((c) => c.kind === "task" && c.dayKey === dateKey && c.start !== undefined)}
+                  onMark={onMark}
+                  onDelete={onDelete}
+                  onResize={onResize}
+                  onUpdate={onUpdate}
+                  onCreate={onCreate}
+                  onMoveToDay={onMoveToDay}
+                  onCopyEvent={onCopyEvent}
+                  onSelectEvent={onSelectEvent}
+                  compact={compact}
+                  privacyMode={privacyMode}
+                  focusMode={focusMode}
+                  isSelected={dateKey === selectedDayKey}
+                  onDayClick={onDayClick}
+                  onOpenDayBoard={onOpenDayBoard}
+                />
+              </div>
+              {i < weekDates.length - 1 && (
+                <div
+                  onMouseDown={(e) => startColResize(e, i)}
+                  style={{
+                    width: 8,
+                    flexShrink: 0,
+                    cursor: "col-resize",
+                    display: "flex",
+                    alignItems: "stretch",
+                    justifyContent: "center",
+                    zIndex: 20,
+                  }}
+                >
+                  <div style={{ width: 2, background: "rgba(0,0,0,0.07)", borderRadius: 1, transition: "background 0.15s" }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(83,74,183,0.35)"; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.07)"; }}
+                  />
+                </div>
+              )}
+            </Fragment>
           );
         })}
       </div>

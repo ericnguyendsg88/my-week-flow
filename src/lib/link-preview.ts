@@ -42,6 +42,76 @@ function isSpotifyUrl(url: string): boolean {
   try { return new URL(url).hostname === "open.spotify.com"; } catch { return false; }
 }
 
+function isTwitterUrl(url: string): boolean {
+  try {
+    const h = new URL(url).hostname.replace(/^www\./, "");
+    return h === "x.com" || h === "twitter.com";
+  } catch { return false; }
+}
+
+/** Parse @handle and tweet context purely from the URL — always works, no network needed */
+function parseTwitterUrl(url: string): LinkPreview {
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split("/").filter(Boolean); // e.g. ["username"] or ["username","status","id"]
+    const handle = parts[0] ? `@${parts[0]}` : null;
+    const isTweet = parts[1] === "status" && parts[2];
+    return {
+      title: handle ? (isTweet ? `Tweet by ${handle}` : `${handle} on X`) : "X post",
+      description: handle ?? undefined,
+      site: "X / Twitter",
+    };
+  } catch {
+    return { site: "X / Twitter" };
+  }
+}
+
+async function fetchTwitter(url: string): Promise<LinkPreview> {
+  // Normalize x.com → twitter.com for the oEmbed endpoint
+  const normalised = url.replace(/^(https?:\/\/)(www\.)?x\.com/, "https://twitter.com");
+
+  // Try publish.twitter.com/oembed first
+  const tryOembed = async (endpoint: string): Promise<LinkPreview | null> => {
+    try {
+      const res = await fetch(endpoint, { signal: AbortSignal.timeout(5000) });
+      if (!res.ok) return null;
+      const json = await res.json();
+      const author: string = json.author_name ?? "";
+      const handle: string = json.author_url
+        ? `@${json.author_url.split("/").filter(Boolean).pop() ?? author}`
+        : author ? `@${author}` : "";
+      // Extract tweet text from the oEmbed HTML
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(json.html ?? "", "text/html");
+      // Strip out trailing "— Author (link)" from <p> text
+      const p = doc.querySelector("blockquote p, p");
+      const raw = p?.textContent?.trim() ?? "";
+      // Twitter appends a pic.twitter.com/... link at the end — strip it
+      const tweetText = raw.replace(/\s*pic\.twitter\.com\/\S+$/i, "").replace(/\s*https:\/\/t\.co\/\S+$/i, "").trim();
+      if (!tweetText && !author) return null;
+      return {
+        title: tweetText || (author ? `Tweet by ${author}` : null) || undefined,
+        description: handle || undefined,
+        site: "X / Twitter",
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  const fromOembed =
+    await tryOembed(`https://publish.twitter.com/oembed?url=${encodeURIComponent(normalised)}&omit_script=true`) ??
+    await tryOembed(`https://noembed.com/embed?url=${encodeURIComponent(normalised)}`);
+
+  // Always merge with URL-parsed fallback so title is never empty
+  const fallback = parseTwitterUrl(url);
+  return {
+    title: fromOembed?.title ?? fallback.title,
+    description: fromOembed?.description ?? fallback.description,
+    site: "X / Twitter",
+  };
+}
+
 async function fetchSpotify(url: string): Promise<LinkPreview> {
   const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
   const res = await fetch(oembedUrl, { signal: AbortSignal.timeout(6000) });
@@ -64,6 +134,11 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview> {
   // Spotify: use oEmbed — returns title + artwork without CORS issues
   if (isSpotifyUrl(url)) {
     try { return await fetchSpotify(url); } catch {}
+  }
+
+  // X / Twitter: JS-rendered — use oEmbed with URL-parsed fallback guarantee
+  if (isTwitterUrl(url)) {
+    return fetchTwitter(url);
   }
 
   // General: use allorigins proxy to fetch raw HTML

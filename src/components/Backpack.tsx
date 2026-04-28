@@ -19,31 +19,58 @@ const KINDS: {
   needsUrl?: boolean;
 }[] = [
   { id: "thought", label: "thought", icon: Lightbulb,  bg: "#F1EFE8", text: "#444441" },
-  { id: "link",    label: "link",    icon: Link2,       bg: "#F1EFE8", text: "#444441", needsUrl: true },
-  { id: "file",    label: "file",    icon: FileText,    bg: "#F1EFE8", text: "#444441" },
-  { id: "ref",     label: "ref",     icon: Bookmark,    bg: "#F1EFE8", text: "#444441" },
-  { id: "task",    label: "task",    icon: Square,      bg: "#F1EFE8", text: "#444441" },
+  { id: "link",    label: "link",    icon: Link2,       bg: "#E8EEF8", text: "#2A4A80", needsUrl: true },
+  { id: "ref",     label: "ref",     icon: Bookmark,    bg: "#F5EEE0", text: "#6B4A1A" },
+  { id: "task",    label: "task",    icon: Square,      bg: "#EDF3EC", text: "#2A5028" },
 ];
 
 function kindMeta(k: CaptureKind) {
   return KINDS.find((x) => x.id === k) ?? KINDS[0];
 }
 
+// Inline rich-text renderer — supports **bold**, _italic_, and `- ` bullet lists
+function renderInline(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*|_[^_]+_)/g);
+  return parts.map((part, i) => {
+    if (/^\*\*[^*]+\*\*$/.test(part)) return <strong key={i} style={{ fontWeight: 700 }}>{part.slice(2, -2)}</strong>;
+    if (/^_[^_]+_$/.test(part)) return <em key={i}>{part.slice(1, -1)}</em>;
+    return <Fragment key={i}>{part}</Fragment>;
+  });
+}
+
 function renderFormattedText(text: string) {
   const lines = text.split("\n");
-  return lines.map((line, lineIdx) => {
-    const parts = line.split(/(\*\*[^*]+\*\*)/g);
-    return (
-      <Fragment key={lineIdx}>
-        {parts.map((part, partIdx) => {
-          const isBold = /^\*\*[^*]+\*\*$/.test(part);
-          const content = isBold ? part.slice(2, -2) : part;
-          return isBold ? <strong key={partIdx}>{content}</strong> : <Fragment key={partIdx}>{content}</Fragment>;
-        })}
-        {lineIdx < lines.length - 1 && <br />}
-      </Fragment>
-    );
-  });
+  const result: React.ReactNode[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.startsWith("- ") || line === "-") {
+      const bullets: string[] = [];
+      while (i < lines.length && (lines[i].startsWith("- ") || lines[i] === "-")) {
+        bullets.push(lines[i].startsWith("- ") ? lines[i].slice(2) : "");
+        i++;
+      }
+      result.push(
+        <ul key={`ul-${i}`} style={{ margin: "2px 0 2px 2px", paddingLeft: 14, listStyleType: "disc" }}>
+          {bullets.map((b, j) => (
+            <li key={j} style={{ fontSize: 13, fontFamily: "'Lora', Georgia, serif", color: "#444441", lineHeight: 1.55 }}>
+              {renderInline(b)}
+            </li>
+          ))}
+        </ul>
+      );
+    } else {
+      const isLast = i === lines.length - 1;
+      result.push(
+        <Fragment key={i}>
+          {renderInline(line)}
+          {!isLast && <br />}
+        </Fragment>
+      );
+      i++;
+    }
+  }
+  return result;
 }
 
 function Timestamp({ ts, color }: { ts: number; color: string }) {
@@ -80,41 +107,202 @@ function CardActions({ onPlace, onRemove, accent }: { onPlace: (e: React.MouseEv
   );
 }
 
-// ── Thought card — sticky note style ─────────────────────────────
+// ── Thought card — writing app style ────────────────────────────
 function ThoughtCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e: React.MouseEvent) => void; onRemove: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(item.title);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  function startEdit(e?: React.MouseEvent) {
+    setDraft(item.title);
+    setEditing(true);
+    setTimeout(() => {
+      const ta = taRef.current;
+      if (!ta) return;
+      ta.focus();
+      // Place caret near click position if possible
+      if (e) {
+        ta.setSelectionRange(ta.value.length, ta.value.length);
+      }
+    }, 20);
+  }
+
+  function save() {
+    const v = draft.trim();
+    if (v && v !== item.title) patchCapture(item.id, { title: v });
+    setEditing(false);
+  }
+
+  function wrapSelection(before: string, after: string) {
+    const ta = taRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const selected = draft.slice(start, end);
+    const newText = draft.slice(0, start) + before + selected + after + draft.slice(end);
+    setDraft(newText);
+    requestAnimationFrame(() => {
+      ta.focus();
+      if (selected.length === 0) {
+        ta.setSelectionRange(start + before.length, start + before.length);
+      } else {
+        ta.setSelectionRange(start + before.length, end + before.length);
+      }
+    });
+  }
+
+  function toggleBullet() {
+    const ta = taRef.current;
+    if (!ta) return;
+    const pos = ta.selectionStart;
+    const lineStart = draft.lastIndexOf("\n", pos - 1) + 1;
+    const lineEnd = draft.indexOf("\n", pos);
+    const end = lineEnd === -1 ? draft.length : lineEnd;
+    const line = draft.slice(lineStart, end);
+    let newText: string;
+    let newCaret: number;
+    if (line.startsWith("- ")) {
+      newText = draft.slice(0, lineStart) + line.slice(2) + draft.slice(end);
+      newCaret = Math.max(lineStart, pos - 2);
+    } else {
+      newText = draft.slice(0, lineStart) + "- " + line + draft.slice(end);
+      newCaret = pos + 2;
+    }
+    setDraft(newText);
+    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(newCaret, newCaret); });
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    const meta = e.metaKey || e.ctrlKey;
+    if (meta && e.key === "b") { e.preventDefault(); wrapSelection("**", "**"); return; }
+    if (meta && e.key === "i") { e.preventDefault(); wrapSelection("_", "_"); return; }
+    if (meta && e.key === "Enter") { e.preventDefault(); save(); return; }
+    if (e.key === "Escape") { setEditing(false); return; }
+    if (e.key === "Enter") {
+      const ta = e.currentTarget;
+      const pos = ta.selectionStart;
+      const lineStart = draft.lastIndexOf("\n", pos - 1) + 1;
+      const currentLine = draft.slice(lineStart, pos);
+      if (currentLine.match(/^- /)) {
+        e.preventDefault();
+        if (currentLine === "- ") {
+          // empty bullet — remove it
+          const newText = draft.slice(0, lineStart) + draft.slice(pos);
+          setDraft(newText);
+          requestAnimationFrame(() => { ta.setSelectionRange(lineStart, lineStart); });
+        } else {
+          const insert = "\n- ";
+          const newText = draft.slice(0, pos) + insert + draft.slice(pos);
+          setDraft(newText);
+          requestAnimationFrame(() => { ta.setSelectionRange(pos + insert.length, pos + insert.length); });
+        }
+      }
+    }
+  }
+
+  // Auto-height textarea
+  function autoResize(el: HTMLTextAreaElement | null) {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  }
+
   return (
     <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: item.placed ? 0.4 : 1, y: 0 }} exit={{ opacity: 0, x: -8 }}
-      style={{ borderRadius: 10, background: "#FAFAFA", border: "0.5px solid #E5E4E0", marginBottom: 5, padding: "8px 10px", position: "relative" }}
+      draggable={!editing}
+      onDragStart={e => { e.dataTransfer.setData("text/capture-json", JSON.stringify(item)); e.dataTransfer.effectAllowed = "copy"; }}
+      style={{ borderRadius: 10, background: editing ? "#FFFCF5" : "#FAF8F2", border: editing ? "1px solid #D4CEBC" : "0.5px solid #E2DFDA", marginBottom: 5, padding: "8px 10px", position: "relative", cursor: editing ? "default" : "grab", transition: "background 0.15s, border-color 0.15s" }}
     >
+      {/* Header row */}
       <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
-        <div style={{ width: 16, height: 16, borderRadius: 4, background: "#F1EFE8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <Lightbulb size={9} color="#5F5E5A" strokeWidth={2} />
+        <div style={{ width: 16, height: 16, borderRadius: 4, background: "#EDE9E0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Lightbulb size={9} color="#6B5E3A" strokeWidth={2} />
         </div>
-        <span style={{ fontSize: 9, fontWeight: 500, color: "#5F5E5A", textTransform: "uppercase", letterSpacing: "0.07em" }}>thought</span>
+        <span style={{ fontSize: 9, fontWeight: 500, color: "#6B5E3A", textTransform: "uppercase", letterSpacing: "0.07em" }}>thought</span>
         <span style={{ marginLeft: "auto" }}><Timestamp ts={item.createdAt} color="#A8A4A0" /></span>
       </div>
-      <p style={{ fontSize: 13, fontWeight: 400, fontFamily: "'Lora', Georgia, serif", color: "#444441", lineHeight: 1.6, wordBreak: "break-word" }}>
-        {renderFormattedText(item.title)}
-      </p>
-      <CardActions onPlace={onPlace} onRemove={onRemove} accent={{ bg: "#F1EFE8", text: "#444441" }} />
+
+      {editing ? (
+        <div>
+          {/* Mini formatting toolbar */}
+          <div style={{ display: "flex", alignItems: "center", gap: 2, marginBottom: 6, padding: "3px 4px", background: "rgba(0,0,0,0.03)", borderRadius: 6 }}>
+            {([
+              { label: "B", title: "Bold (⌘B)", style: { fontWeight: 700 }, action: () => wrapSelection("**", "**") },
+              { label: "I", title: "Italic (⌘I)", style: { fontStyle: "italic" }, action: () => wrapSelection("_", "_") },
+              { label: "•", title: "Bullet list", style: {}, action: toggleBullet },
+            ] as const).map(btn => (
+              <button
+                key={btn.label}
+                type="button"
+                title={btn.title}
+                onMouseDown={e => { e.preventDefault(); btn.action(); }}
+                style={{ width: 22, height: 22, borderRadius: 4, background: "transparent", border: "none", cursor: "pointer", fontSize: btn.label === "•" ? 15 : 11, color: "#6B5E3A", display: "flex", alignItems: "center", justifyContent: "center", ...btn.style, fontFamily: "'Lora', Georgia, serif" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "rgba(0,0,0,0.07)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+              >
+                {btn.label}
+              </button>
+            ))}
+            <span style={{ marginLeft: "auto", fontSize: 9, color: "#B8B4AE" }}>⌘↵ save</span>
+          </div>
+          <textarea
+            ref={el => { (taRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el; autoResize(el); }}
+            value={draft}
+            onChange={e => { setDraft(e.target.value); autoResize(e.target); }}
+            onBlur={save}
+            onKeyDown={handleKeyDown}
+            style={{ width: "100%", boxSizing: "border-box", fontSize: 13, fontFamily: "'Lora', Georgia, serif", color: "#444441", background: "transparent", border: "none", outline: "none", resize: "none", lineHeight: 1.65, padding: 0, minHeight: 52, overflow: "hidden" }}
+          />
+        </div>
+      ) : (
+        <div
+          onClick={startEdit}
+          title="Click to edit"
+          style={{ fontSize: 13, fontWeight: 400, fontFamily: "'Lora', Georgia, serif", color: "#444441", lineHeight: 1.65, wordBreak: "break-word", cursor: "text", minHeight: 20 }}
+        >
+          {renderFormattedText(item.title)}
+        </div>
+      )}
+      <CardActions onPlace={onPlace} onRemove={onRemove} accent={{ bg: "#EDE9E0", text: "#6B5E3A" }} />
     </motion.div>
   );
 }
 
 // ── Task card — checkbox style ────────────────────────────────────
 function TaskCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e: React.MouseEvent) => void; onRemove: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(item.title);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  function startEdit() { setDraft(item.title); setEditing(true); setTimeout(() => { taRef.current?.focus(); taRef.current?.select(); }, 20); }
+  function save() { const v = draft.trim(); if (v && v !== item.title) patchCapture(item.id, { title: v }); setEditing(false); }
+
   return (
     <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: item.placed ? 0.4 : 1, y: 0 }} exit={{ opacity: 0, x: -8 }}
-      style={{ borderRadius: 10, background: "#FAFAFA", border: "0.5px solid #E5E4E0", marginBottom: 5, padding: "8px 10px" }}
+      draggable={!editing}
+      onDragStart={e => { e.dataTransfer.setData("text/capture-json", JSON.stringify(item)); e.dataTransfer.effectAllowed = "copy"; }}
+      style={{ borderRadius: 10, background: editing ? "#F4FAF4" : "#F2F8F2", border: editing ? "1px solid #A8CCA6" : "0.5px solid #C8DEC6", marginBottom: 5, padding: "8px 10px", cursor: editing ? "default" : "grab" }}
     >
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-        <div style={{ width: 16, height: 16, borderRadius: 4, background: "#FAFAFA", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: "1.5px solid #D3D1C7" }}>
-          <Square size={8} color="#5F5E5A" strokeWidth={2} />
+        <div style={{ width: 16, height: 16, borderRadius: 4, background: "#E0F0DE", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: "1.5px solid #A8CCA6", marginTop: 1 }}>
+          <Square size={8} color="#2A5028" strokeWidth={2} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: 13, fontWeight: 400, fontFamily: "'Lora', Georgia, serif", color: "#444441", lineHeight: 1.5, wordBreak: "break-word" }}>
-            {renderFormattedText(item.title)}
-          </p>
+          {editing ? (
+            <textarea
+              ref={taRef}
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              onBlur={save}
+              onKeyDown={e => { if (e.key === "Escape") setEditing(false); if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); } }}
+              rows={2}
+              style={{ width: "100%", boxSizing: "border-box", fontSize: 13, fontFamily: "'Lora', Georgia, serif", color: "#444441", background: "transparent", border: "none", outline: "none", resize: "none", lineHeight: 1.5, padding: 0 }}
+            />
+          ) : (
+            <p onClick={startEdit} title="Click to edit" style={{ fontSize: 13, fontWeight: 400, fontFamily: "'Lora', Georgia, serif", color: "#444441", lineHeight: 1.5, wordBreak: "break-word", cursor: "text" }}>
+              {renderFormattedText(item.title)}
+            </p>
+          )}
           <span style={{ marginTop: 3, display: "block" }}><Timestamp ts={item.createdAt} color="#A8A4A0" /></span>
         </div>
         <button onClick={onRemove} style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "#D3D1C7", flexShrink: 0 }}>
@@ -130,11 +318,19 @@ function TaskCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
 
 // ── Ref card — bookmark with left accent ─────────────────────────
 function RefCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e: React.MouseEvent) => void; onRemove: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(item.title);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function startEdit() { setDraft(item.title); setEditing(true); setTimeout(() => { inputRef.current?.focus(); inputRef.current?.select(); }, 20); }
+  function save() { const v = draft.trim(); if (v && v !== item.title) patchCapture(item.id, { title: v }); setEditing(false); }
+
   return (
     <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: item.placed ? 0.4 : 1, y: 0 }} exit={{ opacity: 0, x: -8 }}
-      style={{ borderRadius: 10, background: "#FAFAFA", border: "0.5px solid #E5E4E0", marginBottom: 5, padding: "8px 10px", display: "flex", gap: 8 }}
+      draggable={!editing}
+      onDragStart={e => { e.dataTransfer.setData("text/capture-json", JSON.stringify(item)); e.dataTransfer.effectAllowed = "copy"; }}
+      style={{ borderRadius: 10, background: editing ? "#FFFDF8" : "#FAFAFA", border: editing ? "1px solid #C8C4BE" : "0.5px solid #E5E4E0", marginBottom: 5, padding: "8px 10px", display: "flex", gap: 8, cursor: editing ? "default" : "grab" }}
     >
-      {/* Bookmark icon square */}
       <div style={{ width: 16, height: 16, borderRadius: 4, background: "#F1EFE8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <Bookmark size={9} color="#5F5E5A" strokeWidth={2} />
       </div>
@@ -144,9 +340,20 @@ function RefCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e: 
           <span style={{ marginLeft: "auto" }}><Timestamp ts={item.createdAt} color="#A8A4A0" /></span>
           <button onClick={onRemove} style={{ background: "none", border: "none", cursor: "pointer", padding: 1, color: "#D3D1C7" }}><X size={9} /></button>
         </div>
-        <p style={{ fontSize: 13, fontWeight: 500, color: "#444441", lineHeight: 1.4, wordBreak: "break-word" }}>
-          {item.title}
-        </p>
+        {editing ? (
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={save}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); save(); } if (e.key === "Escape") setEditing(false); }}
+            style={{ width: "100%", boxSizing: "border-box", fontSize: 13, fontWeight: 500, color: "#444441", background: "transparent", border: "none", outline: "none", lineHeight: 1.4, padding: 0, fontFamily: "inherit" }}
+          />
+        ) : (
+          <p onClick={startEdit} title="Click to edit" style={{ fontSize: 13, fontWeight: 500, color: "#444441", lineHeight: 1.4, wordBreak: "break-word", cursor: "text" }}>
+            {item.title}
+          </p>
+        )}
         {item.url && (
           <p style={{ fontSize: 10, color: "#5F5E5A", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.75 }}>
             {item.url}
@@ -162,12 +369,21 @@ function RefCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e: 
 function FileCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e: React.MouseEvent) => void; onRemove: () => void }) {
   const ext = item.title.includes(".") ? item.title.split(".").pop()?.toUpperCase() : null;
   const base = ext ? item.title.slice(0, item.title.lastIndexOf(".")) : item.title;
+
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(item.title);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function startEdit() { setDraft(item.title); setEditing(true); setTimeout(() => { inputRef.current?.focus(); inputRef.current?.select(); }, 20); }
+  function save() { const v = draft.trim(); if (v && v !== item.title) patchCapture(item.id, { title: v }); setEditing(false); }
+
   return (
     <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: item.placed ? 0.4 : 1, y: 0 }} exit={{ opacity: 0, x: -8 }}
-      style={{ borderRadius: 10, background: "#FAFAFA", border: "0.5px solid #E5E4E0", marginBottom: 5, padding: "8px 10px" }}
+      draggable={!editing}
+      onDragStart={e => { e.dataTransfer.setData("text/capture-json", JSON.stringify(item)); e.dataTransfer.effectAllowed = "copy"; }}
+      style={{ borderRadius: 10, background: editing ? "#FFFDF8" : "#FAFAFA", border: editing ? "1px solid #C8C4BE" : "0.5px solid #E5E4E0", marginBottom: 5, padding: "8px 10px", cursor: editing ? "default" : "grab" }}
     >
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-        {/* File icon square */}
         <div style={{ width: 16, height: 16, borderRadius: 4, background: "#F1EFE8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           <FileText size={9} color="#5F5E5A" strokeWidth={2} />
         </div>
@@ -177,9 +393,20 @@ function FileCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
             <span style={{ marginLeft: "auto" }}><Timestamp ts={item.createdAt} color="#A8A4A0" /></span>
             <button onClick={onRemove} style={{ background: "none", border: "none", cursor: "pointer", padding: 1, color: "#D3D1C7" }}><X size={9} /></button>
           </div>
-          <p style={{ fontSize: 13, fontWeight: 500, color: "#444441", lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {base}
-          </p>
+          {editing ? (
+            <input
+              ref={inputRef}
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              onBlur={save}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); save(); } if (e.key === "Escape") setEditing(false); }}
+              style={{ width: "100%", boxSizing: "border-box", fontSize: 13, fontWeight: 500, color: "#444441", background: "transparent", border: "none", outline: "none", lineHeight: 1.35, padding: 0, fontFamily: "inherit" }}
+            />
+          ) : (
+            <p onClick={startEdit} title="Click to edit" style={{ fontSize: 13, fontWeight: 500, color: "#444441", lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "text" }}>
+              {base}
+            </p>
+          )}
           <CardActions onPlace={onPlace} onRemove={onRemove} accent={{ bg: "#F1EFE8", text: "#444441" }} />
         </div>
       </div>
@@ -307,6 +534,10 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
   const hostname = (() => { try { return new URL(item.url ?? "").hostname.replace(/^www\./, ""); } catch { return ""; } })();
   const displayTitle = item.ogTitle ?? (item.title && item.title !== item.url ? item.title : null) ?? hostname ?? item.url;
 
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState(item.note ?? "");
+  const noteRef = useRef<HTMLTextAreaElement>(null);
+
   // Retry fetch for items that have a URL but no ogTitle yet
   useEffect(() => {
     if (!item.url || item.ogTitle || item.ogLoading) return;
@@ -318,6 +549,17 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
+
+  function saveNote() {
+    patchCapture(item.id, { note: noteDraft.trim() || undefined });
+    setNoteOpen(false);
+  }
+
+  function openNote() {
+    setNoteDraft(item.note ?? "");
+    setNoteOpen(true);
+    setTimeout(() => { noteRef.current?.focus(); noteRef.current?.select(); }, 30);
+  }
 
   return (
     <motion.div
@@ -367,6 +609,45 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
         </p>
       )}
 
+      {/* User note — show inline if exists, or expand on click */}
+      {noteOpen ? (
+        <div style={{ marginBottom: 6 }}>
+          <textarea
+            ref={noteRef}
+            value={noteDraft}
+            onChange={e => setNoteDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveNote(); } if (e.key === "Escape") { setNoteOpen(false); } }}
+            placeholder="Add a note…"
+            rows={2}
+            style={{
+              width: "100%", boxSizing: "border-box",
+              fontSize: 11, color: "#444441", background: "#F5F3EE",
+              border: "1px solid #D8D5CE", borderRadius: 6,
+              padding: "5px 7px", resize: "none", outline: "none",
+              fontFamily: "'Lora', Georgia, serif", lineHeight: 1.5,
+            }}
+          />
+          <div style={{ display: "flex", gap: 4, marginTop: 3 }}>
+            <button type="button" onClick={saveNote}
+              style={{ fontSize: 9, fontWeight: 600, color: "#fff", background: "#3C3489", border: "none", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>
+              save
+            </button>
+            <button type="button" onClick={() => setNoteOpen(false)}
+              style={{ fontSize: 9, color: "#999", background: "#F0EDE8", border: "none", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>
+              cancel
+            </button>
+          </div>
+        </div>
+      ) : item.note ? (
+        <p
+          onClick={openNote}
+          title="Click to edit note"
+          style={{ fontSize: 11, color: "#666", fontFamily: "'Lora', Georgia, serif", lineHeight: 1.45, marginBottom: 6, cursor: "text", borderLeft: "2px solid #D8D5CE", paddingLeft: 6 }}
+        >
+          {item.note}
+        </p>
+      ) : null}
+
       {/* Actions */}
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
         <button
@@ -376,6 +657,15 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
         >
           open
         </button>
+        {!noteOpen && (
+          <button
+            type="button"
+            onClick={openNote}
+            style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 9, fontWeight: 500, color: item.note ? "#3C3489" : "#888", background: item.note ? "#EEEDFE" : "#F1EFE8", border: "none", borderRadius: 5, padding: "2px 6px", cursor: "pointer" }}
+          >
+            {item.note ? "note ✎" : "+ note"}
+          </button>
+        )}
         <button
           type="button"
           onClick={onPlace}
@@ -644,7 +934,7 @@ export function Backpack({ selectedDayKey, dayEvents = [], onAttachToEvent, onCr
             if (item.kind === "thought") return <ThoughtCard key={item.id} item={item} onPlace={(e) => openPlacePicker(item, e)} onRemove={() => removeCapture(item.id)} />;
             if (item.kind === "task")    return <TaskCard    key={item.id} item={item} onPlace={(e) => openPlacePicker(item, e)} onRemove={() => removeCapture(item.id)} />;
             if (item.kind === "ref")     return <RefCard     key={item.id} item={item} onPlace={(e) => openPlacePicker(item, e)} onRemove={() => removeCapture(item.id)} />;
-            if (item.kind === "file")    return <FileCard    key={item.id} item={item} onPlace={(e) => openPlacePicker(item, e)} onRemove={() => removeCapture(item.id)} />;
+            if (item.kind === "file")    return null; // file type hidden
             return null;
           })}
         </AnimatePresence>

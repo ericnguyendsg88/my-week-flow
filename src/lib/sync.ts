@@ -160,6 +160,7 @@ type DbCapture = {
   start?: number;
   placed?: boolean;
   meal_type?: string;
+  note?: string;
   created_at?: string;
 };
 
@@ -175,6 +176,7 @@ function captureToRow(c: CaptureItem, userId: string): DbCapture {
     start: c.start,
     placed: c.placed,
     meal_type: c.mealType,
+    note: c.note,
     created_at: new Date(c.createdAt).toISOString(),
   };
 }
@@ -190,6 +192,7 @@ function rowToCapture(r: DbCapture): CaptureItem {
     start: r.start,
     placed: r.placed,
     mealType: r.meal_type as CaptureItem["mealType"],
+    note: r.note,
     createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
   };
 }
