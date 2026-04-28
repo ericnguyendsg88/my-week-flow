@@ -808,9 +808,20 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                     const todayCaps = allCaptures.filter(c => c.dayKey === todayKey).slice(0, 4);
                     if (todayCaps.length === 0) return <div style={{ fontSize: 11, color: "#A89ED8", fontStyle: "italic", textAlign: "center", padding: "8px 0" }}>No captures yet today</div>;
                     return todayCaps.map(cap => (
-                      <div key={cap.id} style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
+                      <div
+                        key={cap.id}
+                        draggable
+                        onDragStart={e => {
+                          e.dataTransfer.setData("text/capture-json", JSON.stringify(cap));
+                          e.dataTransfer.effectAllowed = "copy";
+                        }}
+                        style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5, cursor: "grab", borderRadius: 7, padding: "2px 4px", transition: "background 0.1s" }}
+                        onMouseEnter={e => { e.currentTarget.style.background = "#EDE8FC"; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                      >
                         <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#8B83D4", flexShrink: 0 }} />
                         <span style={{ fontSize: 11, color: "#3C3489", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cap.title}</span>
+                        <span style={{ marginLeft: "auto", fontSize: 9, color: "#B0A8D4", flexShrink: 0 }}>drag →</span>
                       </div>
                     ));
                   })()}

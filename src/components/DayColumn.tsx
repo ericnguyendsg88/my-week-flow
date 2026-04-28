@@ -9,6 +9,31 @@ import { NowMarker } from "./NowMarker";
 import { nowMinutes, minutesToLabel, durationLabel } from "@/lib/event-utils";
 import { patchCapture } from "@/lib/capture-store";
 
+// ── Sticker storage ───────────────────────────────────────────────────
+const STICKER_STORAGE = "horizon_stickers";
+
+function loadStickers(): Record<string, CaptureItem[]> {
+  try { return JSON.parse(localStorage.getItem(STICKER_STORAGE) ?? "{}"); } catch { return {}; }
+}
+
+function saveStickers(all: Record<string, CaptureItem[]>) {
+  localStorage.setItem(STICKER_STORAGE, JSON.stringify(all));
+}
+
+function addSticker(dateKey: string, item: CaptureItem) {
+  const all = loadStickers();
+  const existing = all[dateKey] ?? [];
+  if (existing.find(s => s.id === item.id)) return;
+  all[dateKey] = [...existing, item];
+  saveStickers(all);
+}
+
+function removeSticker(dateKey: string, itemId: string) {
+  const all = loadStickers();
+  all[dateKey] = (all[dateKey] ?? []).filter(s => s.id !== itemId);
+  saveStickers(all);
+}
+
 // ── Day type ──────────────────────────────────────────────────────────
 export type DayType = "work" | "holiday" | "free" | "travel" | "sick" | "focus";
 
@@ -144,6 +169,92 @@ interface DraftEvent {
   anchorY: number;
 }
 
+// ── Sticker Note — sticky note dropped on a day header ───────────────
+const STICKER_COLORS: Record<string, { bg: string; border: string; text: string }> = {
+  task:    { bg: "#FFF9C4", border: "#E8D000", text: "#5C4A00" },
+  thought: { bg: "#E3F2FD", border: "#90CAF9", text: "#0D3F6B" },
+  link:    { bg: "#E8F5E9", border: "#81C784", text: "#1B5E20" },
+  ref:     { bg: "#FCE4EC", border: "#F48FB1", text: "#6A0F2E" },
+  file:    { bg: "#F3E5F5", border: "#BA68C8", text: "#4A148C" },
+};
+
+function StickerNote({ item, index, onPeel }: { item: CaptureItem; index: number; onPeel: () => void }) {
+  const [hovered, setHovered] = useState(false);
+  const rot = ((index * 37 + item.id.charCodeAt(0)) % 11) - 5;
+  const sc = STICKER_COLORS[item.kind] ?? STICKER_COLORS.task;
+
+  return (
+    <motion.div
+      initial={{ scale: 0.3, rotate: rot * 3, opacity: 0, y: -16 }}
+      animate={{ scale: hovered ? 1.08 : 1, rotate: hovered ? 0 : rot, opacity: 1, y: 0 }}
+      exit={{ scale: 0.2, rotate: rot * 4, opacity: 0, y: -12 }}
+      transition={{ type: "spring", stiffness: 380, damping: 20 }}
+      onHoverStart={() => setHovered(true)}
+      onHoverEnd={() => setHovered(false)}
+      onClick={e => e.stopPropagation()}
+      style={{
+        position: "relative",
+        background: sc.bg,
+        border: `1.5px solid ${sc.border}`,
+        borderRadius: 3,
+        padding: "6px 8px 7px",
+        maxWidth: 80,
+        minWidth: 44,
+        cursor: "default",
+        userSelect: "none",
+        boxShadow: hovered
+          ? `0 8px 20px rgba(0,0,0,0.22), 0 2px 6px rgba(0,0,0,0.12)`
+          : `0 2px 5px rgba(0,0,0,0.14), 1px 1px 0 rgba(0,0,0,0.04)`,
+        zIndex: hovered ? 50 : 1,
+      }}
+    >
+      {/* Tape strip at top */}
+      <div style={{
+        position: "absolute",
+        top: -7, left: "50%", transform: "translateX(-50%)",
+        width: 22, height: 11,
+        background: "rgba(255,255,255,0.75)",
+        border: "1px solid rgba(180,180,180,0.45)",
+        borderRadius: 2,
+        backdropFilter: "blur(3px)",
+        WebkitBackdropFilter: "blur(3px)",
+      }} />
+      {/* Kind emoji */}
+      <div style={{ fontSize: 11, lineHeight: 1, marginBottom: 3, marginTop: 1 }}>
+        {item.kind === "task" ? "☐" : item.kind === "link" ? "🔗" : item.kind === "thought" ? "💭" : item.kind === "ref" ? "📌" : "📄"}
+      </div>
+      <span style={{
+        fontSize: 9, fontWeight: 700, color: sc.text,
+        display: "block", lineHeight: 1.35,
+        overflow: "hidden", textOverflow: "ellipsis",
+        whiteSpace: "pre-wrap", maxWidth: 68,
+        wordBreak: "break-word",
+        maxHeight: 36,
+      }}>{item.title}</span>
+      {/* Peel-off X */}
+      {hovered && (
+        <motion.button
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: "spring", stiffness: 500, damping: 20 }}
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); onPeel(); }}
+          style={{
+            position: "absolute", top: -6, right: -6,
+            width: 16, height: 16, borderRadius: "50%",
+            background: "#ff4444", border: "2px solid #fff",
+            cursor: "pointer", display: "flex",
+            alignItems: "center", justifyContent: "center",
+            fontSize: 9, color: "#fff", fontWeight: 900,
+            lineHeight: 1, padding: 0,
+            boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+          }}
+        >×</motion.button>
+      )}
+    </motion.div>
+  );
+}
+
 // ── Task Pill — floating timed task on the timeline ───────────────
 function TaskPill({ task, timelineRef }: { task: CaptureItem; timelineRef: React.RefObject<HTMLDivElement | null> }) {
   const dragRef = useRef<{ startY: number; origStart: number } | null>(null);
@@ -246,6 +357,8 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
   const dateKey = format(date, "yyyy-MM-dd");
 
   const [dayType, setDayType] = useDayType(dateKey);
+  const [stickers, setStickers] = useState<CaptureItem[]>(() => loadStickers()[dateKey] ?? []);
+  const [headerDragOver, setHeaderDragOver] = useState(false);
   const [showTypePicker, setShowTypePicker] = useState(false);
   const [pickerPos, setPickerPos] = useState({ top: 0, left: 0 });
   const typePickerRef = useRef<HTMLDivElement>(null);
@@ -267,6 +380,34 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
   }, [showTypePicker]);
 
   const dayTypeDef = dayType ? DAY_TYPES.find(d => d.id === dayType) : null;
+
+  function handleHeaderDragOver(e: React.DragEvent) {
+    if (!e.dataTransfer.types.includes("text/capture-json")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setHeaderDragOver(true);
+  }
+
+  function handleHeaderDragLeave() {
+    setHeaderDragOver(false);
+  }
+
+  function handleHeaderDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setHeaderDragOver(false);
+    const raw = e.dataTransfer.getData("text/capture-json");
+    if (!raw) return;
+    try {
+      const item: CaptureItem = JSON.parse(raw);
+      addSticker(dateKey, item);
+      setStickers(loadStickers()[dateKey] ?? []);
+    } catch {}
+  }
+
+  function peelSticker(id: string) {
+    removeSticker(dateKey, id);
+    setStickers(s => s.filter(x => x.id !== id));
+  }
 
   const subtitle = "";
 
@@ -881,10 +1022,22 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
       opacity: colOpacity,
       boxShadow: isT ? "0 0 0 0" : "none",
     }}>
-      {/* Header — centered layout */}
+      {/* Header — centered layout, also drop zone for stickers */}
       <div
-        style={{ padding: "14px 10px 12px", boxSizing: "border-box", flexShrink: 0, borderRadius: "19px 19px 0 0", background: headerBg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, cursor: onDayClick ? "pointer" : "default" }}
+        style={{
+          padding: "14px 10px 12px", boxSizing: "border-box", flexShrink: 0, borderRadius: "19px 19px 0 0",
+          background: headerDragOver ? (dayTypeDef ? dayTypeDef.bg : "#F0EEFF") : headerBg,
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
+          cursor: onDayClick ? "pointer" : "default",
+          outline: headerDragOver ? "2px dashed #7B73D6" : "none",
+          outlineOffset: -3,
+          transition: "background 0.15s, outline 0.1s",
+          position: "relative",
+        }}
         onClick={() => onDayClick?.(date)}
+        onDragOver={handleHeaderDragOver}
+        onDragLeave={handleHeaderDragLeave}
+        onDrop={handleHeaderDrop}
       >
         {/* Day name */}
         <span style={{ fontSize: focusMode ? 13 : 10, fontWeight: 700, letterSpacing: "0.06em", color: subColor, textTransform: "uppercase", lineHeight: 1, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -934,6 +1087,15 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
             : <span style={{ opacity: 0.5 }}>type</span>
           }
         </button>
+
+        {/* Stickers — sticky notes on the header */}
+        {stickers.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginTop: 4, width: "100%" }}>
+            {stickers.map((s, i) => (
+              <StickerNote key={s.id} item={s} index={i} onPeel={() => peelSticker(s.id)} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Day type picker popover */}

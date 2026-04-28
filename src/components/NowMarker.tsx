@@ -10,11 +10,12 @@ export function NowMarker() {
   }, []);
 
   return (
-    <div style={{ position: "relative", display: "flex", alignItems: "center", pointerEvents: "none" }}>
-      {/* Full-width hairline */}
+    <div style={{ position: "relative", display: "flex", alignItems: "center", pointerEvents: "none", width: "100%" }}>
+      {/* Hairline — width:100% so it never bleeds outside the column */}
       <div style={{
         position: "absolute",
-        left: 0, right: 0,
+        left: 0,
+        width: "100%",
         top: "50%",
         transform: "translateY(-50%)",
         height: 1,
