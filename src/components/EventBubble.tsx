@@ -149,6 +149,9 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
   const [showShare, setShowShare] = useState(false);
   const [panelPos, setPanelPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const bubbleRef = useRef<HTMLDivElement>(null);
+  // track pointer movement so click after a drag doesn't open the detail panel
+  const pointerDownPos = useRef<{ x: number; y: number } | null>(null);
+  const didDrag = useRef(false);
 
   // edit mode: all fields editable at once
   const [editMode, setEditMode] = useState(false);
@@ -214,7 +217,8 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
   
   const now = nowMinutes();
   const eventEnd = event.start + event.duration;
-  const isInProgress = now >= event.start && now < eventEnd;
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const isInProgress = event.date === todayStr && now >= event.start && now < eventEnd;
 
   const bgColor = isCompleted
     ? "#EAF3DE"
@@ -261,6 +265,7 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
   function handleBubbleClick(e: React.MouseEvent) {
     e.stopPropagation();
     if (isResizing) return;
+    if (didDrag.current) { didDrag.current = false; return; }
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const panelW = Math.min(PANEL_WIDTH, window.innerWidth - PANEL_MARGIN * 2);
     const panelH = Math.min(680, window.innerHeight - PANEL_MARGIN * 2);
@@ -373,9 +378,15 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
                 autoFocus
                 value={editTitle}
                 onChange={e => setEditTitle(e.target.value)}
-                onKeyDown={e => { if (e.key === "Escape") cancelEdit(); }}
+                onKeyDown={e => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter") { e.preventDefault(); saveAll(); } }}
                 style={{ width: "100%", fontSize: 17, fontWeight: 600, fontFamily: "'Lora', Georgia, serif", color: "#111", background: "#F3F0FE", border: "2px solid #7B73D6", borderRadius: 10, padding: "6px 10px", outline: "none", boxSizing: "border-box" }}
               />
+            ) : onUpdate ? (
+              <h3
+                onClick={() => { setEditTitle(event.title); setEditMode(true); }}
+                title="Click to rename"
+                style={{ fontSize: 17, fontWeight: 600, fontFamily: "'Lora', Georgia, serif", color: "#111", lineHeight: 1.3, margin: 0, cursor: "text" }}
+              >{event.title}</h3>
             ) : (
               <h3 style={{ fontSize: 17, fontWeight: 600, fontFamily: "'Lora', Georgia, serif", color: "#111", lineHeight: 1.3, margin: 0 }}>{event.title}</h3>
             )}
@@ -857,6 +868,13 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
         exit={{ scale: 0.9, opacity: 0 }}
         transition={{ type: "spring", stiffness: 350, damping: 25 }}
         whileHover={{ y: -1 }}
+        onPointerDown={(e) => { pointerDownPos.current = { x: e.clientX, y: e.clientY }; didDrag.current = false; }}
+        onPointerMove={(e) => {
+          if (!pointerDownPos.current) return;
+          const dx = e.clientX - pointerDownPos.current.x;
+          const dy = e.clientY - pointerDownPos.current.y;
+          if (Math.sqrt(dx * dx + dy * dy) > 6) didDrag.current = true;
+        }}
         onClick={handleBubbleClick}
         style={{
           borderRadius: 12,

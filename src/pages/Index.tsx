@@ -411,6 +411,12 @@ const HorizonApp = ({ userId }: { userId: string }) => {
         return;
       }
 
+      // w / m — switch view (no modifier, not in input)
+      if (!mod && !inInput) {
+        if (e.key === "w") { e.preventDefault(); setViewMode("week"); return; }
+        if (e.key === "m") { e.preventDefault(); setViewMode("month"); return; }
+      }
+
       if (!mod) return;
 
       // Cmd+C — copy focused event
@@ -950,9 +956,21 @@ const HorizonApp = ({ userId }: { userId: string }) => {
             ) : (
               <div style={{ minWidth: 0 }}>
                 <h2 style={{ fontSize: 28, fontWeight: 600, fontFamily: "'Lora', Georgia, serif", lineHeight: "1.1", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.02em" }}>{format(weekDates[0], "MMMM yyyy")}</h2>
-                <p style={{ fontSize: 13, color: "hsl(var(--muted-foreground))", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {format(weekDates[0], "EEE d")} → {format(weekDates[weekDates.length - 1], "EEE d")}
-                </p>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
+                  <p style={{ fontSize: 13, color: "hsl(var(--muted-foreground))", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", margin: 0 }}>
+                    {format(weekDates[0], "EEE d")} → {format(weekDates[weekDates.length - 1], "EEE d")}
+                  </p>
+                  {(() => {
+                    const lastDay = weekDates[weekDates.length - 1];
+                    const daysLeft = differenceInDays(lastDay, today) + 1;
+                    if (daysLeft <= 0) return null;
+                    return (
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "#7B73D6", background: "#EEEDFE", borderRadius: 20, padding: "1px 8px", whiteSpace: "nowrap", flexShrink: 0 }}>
+                        {daysLeft} day{daysLeft !== 1 ? "s" : ""} left
+                      </span>
+                    );
+                  })()}
+                </div>
               </div>
             )}
 
@@ -1495,21 +1513,29 @@ const GUTTER_ANCHORS: Record<number, { label: string; sub?: string; accent?: boo
   23: { label: "11 PM" },
 };
 
+// Mirror DayColumn's compressed late-hours mapping
+const GUTTER_LATE_START = 22 * 60;
+function gutterTimeToY(mins: number): number {
+  if (mins <= GUTTER_LATE_START) return mins;
+  return GUTTER_LATE_START + (mins - GUTTER_LATE_START) / 3;
+}
+const GUTTER_TOTAL_HEIGHT = gutterTimeToY(24 * 60);
+
 function TimeGutter({ startHour, endHour }: { startHour: number; endHour: number }) {
-  const HOUR_HEIGHT = 60;
   const hours = Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i);
   return (
     <div className="shrink-0" style={{ width: 52, paddingTop: 64 }}>
-      <div style={{ position: "relative", height: (endHour - startHour) * HOUR_HEIGHT }}>
-        {hours.map((h, i) => {
+      <div style={{ position: "relative", height: GUTTER_TOTAL_HEIGHT }}>
+        {hours.map((h) => {
           const anchor = GUTTER_ANCHORS[h];
           if (!anchor) return null;
+          const y = gutterTimeToY(h * 60);
           return (
             <div
               key={h}
               style={{
                 position: "absolute",
-                top: i * HOUR_HEIGHT - (anchor.sub ? 10 : 7),
+                top: y - (anchor.sub ? 10 : 7),
                 right: 6,
                 textAlign: "right",
                 lineHeight: 1,

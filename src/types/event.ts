@@ -93,6 +93,8 @@ export interface CalEvent {
   recurrenceId?: string;
   /** Money spent during/for this event */
   spendings?: SpendingRecord[];
+  /** User-chosen horizontal lane within an overlap group (0 = leftmost) */
+  laneOverride?: number;
 }
 
 export interface CaptureItem {

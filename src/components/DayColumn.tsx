@@ -70,8 +70,32 @@ const DAY_START = 0;         // 12am
 const DAY_END   = 24 * 60;  // midnight
 const DAY_HOURS = (DAY_END - DAY_START) / 60; // 24
 
-const timeToY = (mins: number) => Math.max(0, mins - DAY_START);
-const yToTime = (y: number) => y + DAY_START;
+// Late-hours compression: 22:00–24:00 rendered at 1/3 the normal density
+const LATE_START = 22 * 60;   // 10pm in minutes
+const PX_PER_MIN_NORMAL = 1;  // 60px/hr
+const PX_PER_MIN_LATE   = 1 / 3;  // ~20px/hr
+
+// Total pixel height of the timeline
+const TIMELINE_HEIGHT =
+  LATE_START * PX_PER_MIN_NORMAL +
+  (DAY_END - LATE_START) * PX_PER_MIN_LATE;
+
+function timeToY(mins: number): number {
+  const clamped = Math.max(0, mins);
+  if (clamped <= LATE_START) return clamped * PX_PER_MIN_NORMAL;
+  return LATE_START * PX_PER_MIN_NORMAL + (clamped - LATE_START) * PX_PER_MIN_LATE;
+}
+
+function yToTime(y: number): number {
+  const lateStartY = LATE_START * PX_PER_MIN_NORMAL;
+  if (y <= lateStartY) return y / PX_PER_MIN_NORMAL;
+  return LATE_START + (y - lateStartY) / PX_PER_MIN_LATE;
+}
+
+// Height in px for a duration starting at startMins
+function durationToHeight(startMins: number, durationMins: number): number {
+  return timeToY(startMins + durationMins) - timeToY(startMins);
+}
 
 type Section = "MORNING" | "AFTERNOON" | "EVENING";
 
@@ -244,11 +268,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
 
   const dayTypeDef = dayType ? DAY_TYPES.find(d => d.id === dayType) : null;
 
-  let subtitle = format(date, "EEE d").toLowerCase();
-  if (isT) subtitle = "today";
-  else if (isTom) subtitle = "tomorrow";
-  else if (dayTypeDef) subtitle = dayTypeDef.label.toLowerCase();
-  else if (isWeekend) subtitle = "open day";
+  const subtitle = "";
 
   const now = nowMinutes();
 
@@ -283,42 +303,68 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
 
   const sorted = [...events].sort((a, b) => a.start - b.start);
 
-  // Calculate overlapping events and their columns (max 4 side by side)
-  const getEventLayout = (event: CalEvent, allEvents: CalEvent[]) => {
-    const eventEnd = event.start + event.duration;
-    const overlapping = allEvents.filter(e => {
-      if (e.id === event.id) return false;
-      const eEnd = e.start + e.duration;
-      return !(eEnd <= event.start || e.start >= eventEnd);
-    });
-    
-    // Find which column this event should occupy
-    let column = 0;
-    const sortedOverlapping = [...overlapping].sort((a, b) => a.start - b.start);
-    
-    for (const other of sortedOverlapping) {
-      const otherEnd = other.start + other.duration;
-      const otherStart = other.start;
-      
-      // Check if this column is taken by checking if other event overlaps in time
-      // and if other event is in this column position
-      const colTaken = sortedOverlapping.slice(0, sortedOverlapping.indexOf(other)).some(o => {
-        const oEnd = o.start + o.duration;
-        return !(oEnd <= otherStart || o.start >= otherEnd);
-      });
-      
-      if (!colTaken && other.id < event.id) {
-        column++;
+  // Build overlap groups and assign lanes. Returns { lane, totalLanes } per event.
+  const eventLayoutMap = (() => {
+    const map = new Map<string, { lane: number; totalLanes: number }>();
+
+    // Find all events that overlap with a given event
+    function getOverlapGroup(ev: CalEvent, all: CalEvent[]): CalEvent[] {
+      const group: CalEvent[] = [ev];
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const other of all) {
+          if (group.find(g => g.id === other.id)) continue;
+          const overlapsAny = group.some(g => {
+            const aEnd = g.start + g.duration;
+            const bEnd = other.start + other.duration;
+            return !(aEnd <= other.start || bEnd <= g.start);
+          });
+          if (overlapsAny) { group.push(other); changed = true; }
+        }
+      }
+      return group;
+    }
+
+    const processed = new Set<string>();
+    for (const ev of sorted) {
+      if (processed.has(ev.id)) continue;
+      const group = getOverlapGroup(ev, sorted);
+      group.forEach(g => processed.add(g.id));
+
+      const totalLanes = Math.min(4, group.length);
+
+      // Assign lanes: respect laneOverride, then fill remaining lanes by start time
+      const laneAssigned = new Map<string, number>();
+      const usedLanes = new Set<number>();
+
+      // First pass: honour overrides
+      for (const g of group) {
+        if (g.laneOverride !== undefined && g.laneOverride < totalLanes) {
+          if (!usedLanes.has(g.laneOverride)) {
+            laneAssigned.set(g.id, g.laneOverride);
+            usedLanes.add(g.laneOverride);
+          }
+        }
+      }
+      // Second pass: auto-assign the rest
+      let nextLane = 0;
+      for (const g of [...group].sort((a, b) => a.start - b.start)) {
+        if (laneAssigned.has(g.id)) continue;
+        while (usedLanes.has(nextLane)) nextLane++;
+        laneAssigned.set(g.id, nextLane);
+        usedLanes.add(nextLane);
+        nextLane++;
+      }
+
+      for (const g of group) {
+        map.set(g.id, { lane: laneAssigned.get(g.id) ?? 0, totalLanes });
       }
     }
-    
-    const maxColumns = Math.min(4, Math.max(1, overlapping.length + 1));
-    const width = 100 / maxColumns;
-    
-    return { column, width, maxColumns };
-  };
+    return map;
+  })();
 
-  // ── resize-existing state ──
+  // ── resize-bottom state (changes duration, keeps start fixed) ──
   const [resizingId, setResizingId] = useState<string | null>(null);
   const [liveDuration, setLiveDuration] = useState<number>(0);
   const resizeDragRef = useRef<{ startY: number; origDuration: number } | null>(null);
@@ -352,46 +398,134 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
     document.addEventListener("mouseup", onUp);
   }
 
-  // ── within-day move drag ──
-  const [movingId, setMovingId] = useState<string | null>(null);
-  const [liveStart, setLiveStart] = useState<number>(0);
-  const moveDragRef = useRef<{ startY: number; origStart: number } | null>(null);
+  // ── resize-top state (changes start + duration, keeps end fixed) ──
+  const [resizingTopId, setResizingTopId] = useState<string | null>(null);
+  const [liveTopStart, setLiveTopStart] = useState<number>(0);
+  const [liveTopDuration, setLiveTopDuration] = useState<number>(0);
+  const resizeTopDragRef = useRef<{ startY: number; origStart: number; origDuration: number } | null>(null);
 
-  function handleEventMoveMouseDown(ev: React.MouseEvent, event: CalEvent) {
-    // only trigger on the bubble body, not on resize handle or Google events
-    if ((ev.target as HTMLElement).closest("[data-resize-handle]")) return;
-    // don't preventDefault yet — let click events pass through if no real drag
+  function handleResizeTopMouseDown(ev: React.MouseEvent, event: CalEvent) {
+    ev.preventDefault();
     ev.stopPropagation();
-
-    const startY = ev.clientY;
-    let dragging = false;
-    moveDragRef.current = { startY, origStart: event.start };
+    setResizingTopId(event.id);
+    setLiveTopStart(event.start);
+    setLiveTopDuration(event.duration);
+    resizeTopDragRef.current = { startY: ev.clientY, origStart: event.start, origDuration: event.duration };
 
     function onMove(e: MouseEvent) {
-      if (!moveDragRef.current) return;
-      const delta = e.clientY - moveDragRef.current.startY;
-      if (!dragging && Math.abs(delta) < 5) return; // dead zone before drag activates
-      if (!dragging) {
-        dragging = true;
-        setMovingId(event.id);
-        setLiveStart(event.start);
-      }
-      const newStart = snapStart(moveDragRef.current.origStart + delta);
-      const clamped = Math.max(DAY_START, Math.min(DAY_END - event.duration, newStart));
-      setLiveStart(clamped);
+      if (!resizeTopDragRef.current) return;
+      const delta = e.clientY - resizeTopDragRef.current.startY;
+      const newStart = snapStart(resizeTopDragRef.current.origStart + delta);
+      const end = resizeTopDragRef.current.origStart + resizeTopDragRef.current.origDuration;
+      const newDur = Math.max(15, end - newStart);
+      setLiveTopStart(newStart);
+      setLiveTopDuration(newDur);
     }
 
     function onUp(e: MouseEvent) {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
-      if (dragging && moveDragRef.current) {
-        const delta = e.clientY - moveDragRef.current.startY;
-        const newStart = snapStart(moveDragRef.current.origStart + delta);
-        const clamped = Math.max(DAY_START, Math.min(DAY_END - event.duration, newStart));
-        if (clamped !== moveDragRef.current.origStart) onUpdate?.(event.id, { start: clamped });
+      if (resizeTopDragRef.current) {
+        const delta = e.clientY - resizeTopDragRef.current.startY;
+        const newStart = snapStart(resizeTopDragRef.current.origStart + delta);
+        const end = resizeTopDragRef.current.origStart + resizeTopDragRef.current.origDuration;
+        const newDur = Math.max(15, end - newStart);
+        if (newStart !== resizeTopDragRef.current.origStart) {
+          onUpdate?.(event.id, { start: newStart, duration: newDur });
+        }
+      }
+      resizeTopDragRef.current = null;
+      setResizingTopId(null);
+    }
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+
+  // ── within-day move drag ──
+  const [movingId, setMovingId] = useState<string | null>(null);
+  const [liveStart, setLiveStart] = useState<number>(0);
+  const [liveLane, setLiveLane] = useState<number>(0);
+  const [liveTotalLanes, setLiveTotalLanes] = useState<number>(1);
+  // offset of cursor within the bubble so it doesn't jump on grab
+  const moveDragRef = useRef<{
+    cursorOffsetMins: number;
+    origStart: number;
+    origLane: number;
+    totalLanes: number;
+  } | null>(null);
+
+  function handleEventMoveMouseDown(ev: React.MouseEvent, event: CalEvent) {
+    if ((ev.target as HTMLElement).closest("[data-resize-handle]")) return;
+    ev.stopPropagation();
+
+    const layout = eventLayoutMap.get(event.id) ?? { lane: 0, totalLanes: 1 };
+    const timelineRect = timelineRef.current?.getBoundingClientRect();
+    if (!timelineRect) return;
+
+    // How far into the bubble the user clicked (in minutes) — keeps bubble anchored to cursor
+    const cursorY = ev.clientY - timelineRect.top;
+    const cursorMins = yToTime(cursorY);
+    const cursorOffsetMins = Math.max(0, cursorMins - event.start);
+
+    let dragging = false;
+    moveDragRef.current = {
+      cursorOffsetMins,
+      origStart: event.start,
+      origLane: layout.lane,
+      totalLanes: layout.totalLanes,
+    };
+
+    function onMove(e: MouseEvent) {
+      if (!moveDragRef.current || !timelineRect) return;
+      const relY = e.clientY - timelineRect.top;
+      const relX = e.clientX - timelineRect.left;
+      const distY = Math.abs(e.clientY - (timelineRect.top + cursorY));
+      const distX = Math.abs(e.clientX - (timelineRect.left + (layout.lane / layout.totalLanes) * timelineRect.width));
+      if (!dragging && distY < 5 && distX < 5) return;
+
+      if (!dragging) {
+        dragging = true;
+        setMovingId(event.id);
+        setLiveStart(event.start);
+        setLiveLane(layout.lane);
+        setLiveTotalLanes(layout.totalLanes);
+      }
+
+      // Vertical: map cursor Y → time, subtract intra-bubble offset so top of bubble tracks correctly
+      const rawMins = yToTime(relY) - moveDragRef.current.cursorOffsetMins;
+      const snapped = snapStart(rawMins);
+      const clamped = Math.max(DAY_START, Math.min(DAY_END - event.duration, snapped));
+      setLiveStart(clamped);
+
+      // Horizontal: cursor X as fraction of column width → lane index
+      const fraction = Math.max(0, Math.min(1, relX / timelineRect.width));
+      const newLane = Math.min(moveDragRef.current.totalLanes - 1, Math.floor(fraction * moveDragRef.current.totalLanes));
+      setLiveLane(newLane);
+    }
+
+    function onUp(e: MouseEvent) {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      if (dragging && moveDragRef.current && timelineRect) {
+        const relY = e.clientY - timelineRect.top;
+        const relX = e.clientX - timelineRect.left;
+
+        const rawMins = yToTime(relY) - moveDragRef.current.cursorOffsetMins;
+        const snapped = snapStart(rawMins);
+        const clamped = Math.max(DAY_START, Math.min(DAY_END - event.duration, snapped));
+
+        const fraction = Math.max(0, Math.min(1, relX / timelineRect.width));
+        const newLane = Math.min(moveDragRef.current.totalLanes - 1, Math.floor(fraction * moveDragRef.current.totalLanes));
+
+        const patch: Partial<CalEvent> = { start: clamped };
+        if (newLane !== moveDragRef.current.origLane) patch.laneOverride = newLane;
+        onUpdate?.(event.id, patch);
       }
       moveDragRef.current = null;
       setMovingId(null);
+      setLiveLane(0);
+      setLiveTotalLanes(1);
     }
 
     document.addEventListener("mousemove", onMove);
@@ -742,62 +876,64 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
       display: "flex",
       flexDirection: "column",
       minWidth: focusMode ? 0 : 120,
-      minHeight: 80 + DAY_HOURS * 60,
+      minHeight: 80 + TIMELINE_HEIGHT,
       position: "relative",
       opacity: colOpacity,
       boxShadow: isT ? "0 0 0 0" : "none",
     }}>
-      {/* Header */}
+      {/* Header — centered layout */}
       <div
-        style={{ padding: "12px 12px 8px", height: 84, boxSizing: "border-box", flexShrink: 0, borderRadius: "19px 19px 0 0", background: headerBg, display: "flex", flexDirection: "column", justifyContent: "space-between" }}
+        style={{ padding: "14px 10px 12px", boxSizing: "border-box", flexShrink: 0, borderRadius: "19px 19px 0 0", background: headerBg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, cursor: onDayClick ? "pointer" : "default" }}
+        onClick={() => onDayClick?.(date)}
       >
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", cursor: onDayClick ? "pointer" : "default", gap: 4, overflow: "hidden" }} onClick={() => onDayClick?.(date)}>
-          <div style={{ minWidth: 0, overflow: "hidden" }}>
-            <h3 style={{ fontSize: focusMode ? 18 : 13, fontWeight: 500, color: titleColor, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.2 }}>{format(date, "EEEE")}</h3>
-            <p style={{ fontSize: 10, color: subColor, fontWeight: 400, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.75 }}>{format(date, "MMM yyyy")}</p>
-          </div>
-          {/* Date number badge */}
-          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", marginTop: 1 }}>
-            <div style={{
-              width: 28, height: 28,
-              borderRadius: "50%",
-              background: isT ? "#3B6D11" : isSelected ? (dayTypeDef ? dayTypeDef.border : "#C8C4BE") : "rgba(0,0,0,0.06)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: isT || isSelected ? "#fff" : titleColor, lineHeight: 1, fontFamily: "'DM Sans', system-ui, sans-serif" }}>
-                {format(date, "d")}
-              </span>
-            </div>
-          </div>
+        {/* Day name */}
+        <span style={{ fontSize: focusMode ? 13 : 10, fontWeight: 700, letterSpacing: "0.06em", color: subColor, textTransform: "uppercase", lineHeight: 1, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {format(date, "EEEE")}
+        </span>
+
+        {/* Big date circle */}
+        <div style={{
+          width: focusMode ? 48 : 36, height: focusMode ? 48 : 36,
+          borderRadius: "50%",
+          background: isT ? "#3B6D11" : isSelected ? (dayTypeDef ? dayTypeDef.border : "#C5BEF5") : "transparent",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <span style={{
+            fontSize: focusMode ? 24 : 19, fontWeight: 700,
+            color: isT ? "#fff" : isSelected ? "#fff" : titleColor,
+            lineHeight: 1, fontFamily: "'DM Sans', system-ui, sans-serif",
+          }}>
+            {format(date, "d")}
+          </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4, overflow: "hidden" }}>
-          <p style={{ fontSize: 11, color: subColor, fontWeight: 500, cursor: onDayClick ? "pointer" : "default", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }} onClick={() => onDayClick?.(date)}>{subtitle}</p>
-          <button
-            ref={typeBtnRef}
-            type="button"
-            onClick={e => {
-              e.stopPropagation();
-              if (!showTypePicker && typeBtnRef.current) {
-                const r = typeBtnRef.current.getBoundingClientRect();
-                setPickerPos({ top: r.bottom + 6, left: Math.max(8, r.left - 8) });
-              }
-              setShowTypePicker(v => !v);
-            }}
-            style={{
-              display: "flex", alignItems: "center", gap: 4,
-              background: dayTypeDef ? dayTypeDef.bg : "rgba(0,0,0,0.04)",
-              border: dayTypeDef ? `1px solid ${dayTypeDef.border}` : "1px solid rgba(0,0,0,0.08)",
-              borderRadius: 6,
-              padding: "2px 7px 2px 5px",
-              cursor: "pointer",
-              fontSize: 11, fontWeight: 600,
-              color: dayTypeDef ? dayTypeDef.text : subColor,
-            }}
-          >
-            <span style={{ fontSize: 12, lineHeight: 1 }}>{dayTypeDef ? dayTypeDef.emoji : "+"}</span>
-            <span>{dayTypeDef ? dayTypeDef.label : "type"}</span>
-          </button>
-        </div>
+
+        {/* Day-type pill — centered */}
+        <button
+          ref={typeBtnRef}
+          type="button"
+          onClick={e => {
+            e.stopPropagation();
+            if (!showTypePicker && typeBtnRef.current) {
+              const r = typeBtnRef.current.getBoundingClientRect();
+              setPickerPos({ top: r.bottom + 6, left: Math.max(8, r.left - 8) });
+            }
+            setShowTypePicker(v => !v);
+          }}
+          style={{
+            display: "flex", alignItems: "center", gap: 2,
+            background: dayTypeDef ? dayTypeDef.bg : "rgba(0,0,0,0.04)",
+            border: dayTypeDef ? `1px solid ${dayTypeDef.border}` : "1px solid rgba(0,0,0,0.08)",
+            borderRadius: 5, padding: "2px 7px 2px 5px",
+            cursor: "pointer", fontSize: 9, fontWeight: 600,
+            color: dayTypeDef ? dayTypeDef.text : subColor,
+          }}
+        >
+          <span style={{ fontSize: 10, lineHeight: 1 }}>{dayTypeDef ? dayTypeDef.emoji : "+"}</span>
+          {dayTypeDef
+            ? <span style={{ maxWidth: 64, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{dayTypeDef.label}</span>
+            : <span style={{ opacity: 0.5 }}>type</span>
+          }
+        </button>
       </div>
 
       {/* Day type picker popover */}
@@ -876,7 +1012,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         style={{
-          position: "relative", height: DAY_HOURS * 60, margin: "0 12px",
+          position: "relative", height: TIMELINE_HEIGHT, margin: "0 4px",
           cursor: onCreate ? "crosshair" : "default",
           outline: isDragOver ? "2px dashed #7B73D6" : "none",
           outlineOffset: 2,
@@ -892,7 +1028,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
           const isPM = h24 >= 12;
           const hour12 = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
           return (
-            <div key={`hr-${i}`} style={{ position: "absolute", top: i * 60, left: 0, right: 0, pointerEvents: "none", zIndex: 18 }}>
+            <div key={`hr-${i}`} style={{ position: "absolute", top: timeToY(i * 60), left: 0, right: 0, pointerEvents: "none", zIndex: 18 }}>
               {/* Hour line */}
               <div style={{
                 borderTop: i === 0 ? "none" : "1px solid rgba(0,0,0,0.05)",
@@ -928,7 +1064,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
           );
         })}
         {Array.from({ length: DAY_HOURS }, (_, i) => i).map((i) => (
-          <div key={`hh-${i}`} style={{ position: "absolute", top: i * 60 + 30, left: 0, right: 0, borderTop: "1px dashed rgba(0,0,0,0.03)", pointerEvents: "none", zIndex: 1 }} />
+          <div key={`hh-${i}`} style={{ position: "absolute", top: timeToY(i * 60 + 30), left: 0, right: 0, borderTop: "1px dashed rgba(0,0,0,0.03)", pointerEvents: "none", zIndex: 1 }} />
         ))}
 
         {/* Evening tint band */}
@@ -947,6 +1083,32 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
         <AbsoluteSectionHeader title="MORNING"   y={timeToY(6 * 60)} />
         <AbsoluteSectionHeader title="AFTERNOON" y={timeToY(12 * 60)} />
         <AbsoluteSectionHeader title="EVENING"   y={timeToY(17 * 60)} />
+
+        {/* Late-zone background (22:00–24:00) — warm off-white, compressed */}
+        <div style={{
+          position: "absolute",
+          top: timeToY(LATE_START),
+          left: 0, right: 0,
+          height: TIMELINE_HEIGHT - timeToY(LATE_START),
+          background: "#F8F7F4",
+          borderTop: "1.5px dashed #E0DDD8",
+          borderRadius: "0 0 8px 8px",
+          pointerEvents: "none",
+          zIndex: 1,
+        }} />
+        {/* Late-zone label */}
+        <div style={{
+          position: "absolute",
+          top: timeToY(LATE_START) + 4,
+          left: 8,
+          fontSize: 8,
+          fontWeight: 700,
+          letterSpacing: "0.08em",
+          color: "#C8C4BE",
+          textTransform: "uppercase",
+          pointerEvents: "none",
+          zIndex: 2,
+        }}>late</div>
 
         {/* Ghost block while drag-creating / panel open */}
         {ghost && (
@@ -994,7 +1156,7 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
                   position: "absolute",
                   top: timeToY(ev.start),
                   left: 0, right: 0,
-                  height: Math.max(Math.min(ev.duration, DAY_END - ev.start), 30),
+                  height: Math.max(durationToHeight(ev.start, Math.min(ev.duration, DAY_END - ev.start)), 20),
                   borderRadius: 10,
                   background: "linear-gradient(90deg, #E5E2DC 0%, #EDEBE7 40%, #E5E2DC 100%)",
                   backgroundSize: "200% 100%",
@@ -1071,12 +1233,16 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
           })
         ) : sorted.map((ev) => {
           const isResizing = resizingId === ev.id;
+          const isResizingTop = resizingTopId === ev.id;
           const isMoving = movingId === ev.id;
-          const displayDuration = isResizing ? liveDuration : ev.duration;
-          const displayStart = isMoving ? liveStart : ev.start;
-          const layout = getEventLayout(ev, sorted);
-          const leftOffset = layout.column * layout.width;
-          
+          const displayDuration = isResizing ? liveDuration : isResizingTop ? liveTopDuration : ev.duration;
+          const displayStart = isMoving ? liveStart : isResizingTop ? liveTopStart : ev.start;
+          const layout = eventLayoutMap.get(ev.id) ?? { lane: 0, totalLanes: 1 };
+          const displayLane = isMoving ? liveLane : layout.lane;
+          const displayTotalLanes = isMoving ? liveTotalLanes : layout.totalLanes;
+          const laneWidth = 100 / displayTotalLanes;
+          const leftOffset = displayLane * laneWidth;
+
           return (
             <div
               key={ev.id}
@@ -1091,14 +1257,13 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
                 position: "absolute",
                 top: timeToY(displayStart),
                 left: `${leftOffset}%`,
-                width: `${layout.width}%`,
-                height: Math.max(Math.min(displayDuration, DAY_END - displayStart), 30),
-                zIndex: isResizing ? 15 : isMoving ? 16 : 10,
-                transition: (isResizing || isMoving) ? "none" : undefined,
+                width: `${laneWidth}%`,
+                height: Math.max(durationToHeight(displayStart, Math.min(displayDuration, DAY_END - displayStart)), 30),
+                zIndex: isResizing || isResizingTop ? 15 : isMoving ? 16 : 10,
+                transition: (isResizing || isResizingTop || isMoving) ? "none" : "left 0.15s ease, width 0.15s ease",
                 cursor: isMoving ? "grabbing" : "grab",
-                opacity: isMoving ? 0.85 : 1,
-                paddingLeft: layout.column > 0 ? 2 : 0,
-                paddingRight: layout.column < layout.maxColumns - 1 ? 2 : 0,
+                opacity: isMoving ? 0.88 : 1,
+                padding: "0 2px",
                 boxSizing: "border-box",
               }}
             >
@@ -1113,26 +1278,65 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
                 isResizing={isResizing || isMoving}
               />
 
-              {/* Live time tooltip while moving */}
+              {/* Live tooltip while moving — shows time + lane indicator */}
               {isMoving && (
                 <div style={{
                   position: "absolute",
-                  top: 6, right: 8,
+                  top: 6, left: "50%", transform: "translateX(-50%)",
                   background: "#3C3489",
                   color: "#fff",
                   fontSize: 10,
                   fontWeight: 600,
                   borderRadius: 6,
-                  padding: "2px 7px",
+                  padding: "2px 8px",
                   pointerEvents: "none",
                   zIndex: 25,
                   whiteSpace: "nowrap",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
                 }}>
                   {minutesToLabel(liveStart)} → {minutesToLabel(liveStart + ev.duration)}
+                  {liveTotalLanes > 1 && (
+                    <span style={{ display: "flex", gap: 3, alignItems: "center" }}>
+                      {Array.from({ length: liveTotalLanes }).map((_, i) => (
+                        <span key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: i === liveLane ? "#fff" : "rgba(255,255,255,0.35)" }} />
+                      ))}
+                    </span>
+                  )}
                 </div>
               )}
 
-              {/* Resize handle */}
+              {/* Resize handle — top (adjusts start, keeps end fixed) */}
+              {onUpdate && (
+                <div
+                  data-resize-handle="true"
+                  onMouseDown={(e) => handleResizeTopMouseDown(e, ev)}
+                  style={{
+                    position: "absolute",
+                    top: 0, left: 6, right: 6,
+                    height: 10,
+                    cursor: "ns-resize",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 20,
+                    borderRadius: "8px 8px 0 0",
+                    background: isResizingTop ? "rgba(107,98,184,0.12)" : "transparent",
+                    transition: "background 0.15s",
+                  }}
+                  onMouseEnter={(e) => { if (!isResizingTop) (e.currentTarget as HTMLDivElement).style.background = "rgba(0,0,0,0.07)"; }}
+                  onMouseLeave={(e) => { if (!isResizingTop) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
+                >
+                  <div style={{
+                    width: 24, height: 3, borderRadius: 2,
+                    background: isResizingTop ? "#7B73D6" : "rgba(0,0,0,0.18)",
+                    transition: "background 0.15s",
+                  }} />
+                </div>
+              )}
+
+              {/* Resize handle — bottom (adjusts duration, keeps start fixed) */}
               {onResize && (
                 <div
                   data-resize-handle="true"
@@ -1161,22 +1365,17 @@ export function DayColumn({ date, events, tags, taskItems = [], onMark, onDelete
                 </div>
               )}
 
-              {/* Live duration tooltip while resizing */}
+              {/* Live tooltip — bottom resize */}
               {isResizing && !isMoving && (
-                <div style={{
-                  position: "absolute",
-                  bottom: 14, right: 8,
-                  background: "#3C3489",
-                  color: "#fff",
-                  fontSize: 10,
-                  fontWeight: 600,
-                  borderRadius: 6,
-                  padding: "2px 7px",
-                  pointerEvents: "none",
-                  zIndex: 25,
-                  whiteSpace: "nowrap",
-                }}>
+                <div style={{ position: "absolute", bottom: 14, right: 8, background: "#3C3489", color: "#fff", fontSize: 10, fontWeight: 600, borderRadius: 6, padding: "2px 7px", pointerEvents: "none", zIndex: 25, whiteSpace: "nowrap" }}>
                   {minutesToLabel(ev.start)} → {minutesToLabel(ev.start + liveDuration)}
+                </div>
+              )}
+
+              {/* Live tooltip — top resize */}
+              {isResizingTop && (
+                <div style={{ position: "absolute", top: 14, right: 8, background: "#3C3489", color: "#fff", fontSize: 10, fontWeight: 600, borderRadius: 6, padding: "2px 7px", pointerEvents: "none", zIndex: 25, whiteSpace: "nowrap" }}>
+                  {minutesToLabel(liveTopStart)} → {minutesToLabel(liveTopStart + liveTopDuration)}
                 </div>
               )}
             </div>
