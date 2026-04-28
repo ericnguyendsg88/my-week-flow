@@ -111,7 +111,7 @@ function BoardCard({ item, onRemove }: { item: CaptureItem; onRemove: () => void
       initial={{ opacity: 0, scale: 0.95, y: 8 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.92, y: -6 }}
-      transition={{ type: "spring", stiffness: 340, damping: 24 }}
+      transition={{ duration: 0.1, ease: "easeOut" }}
       style={{
         background: s.bg,
         border: `1px solid ${s.border}`,
@@ -503,7 +503,7 @@ export function DayBoard({ date, onClose, onNavigate }: {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.18 }}
+        transition={{ duration: 0.12 }}
         onClick={onClose}
         style={{ position: "fixed", inset: 0, background: "rgba(20,18,40,0.45)", zIndex: 400, backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }}
       />
@@ -512,7 +512,7 @@ export function DayBoard({ date, onClose, onNavigate }: {
         initial={{ opacity: 0, y: 32, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 20, scale: 0.97 }}
-        transition={{ type: "spring", stiffness: 340, damping: 28 }}
+        transition={{ type: "spring", stiffness: 500, damping: 36 }}
         onClick={e => e.stopPropagation()}
         style={{
           position: "fixed",

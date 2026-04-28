@@ -339,7 +339,7 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
         initial={{ opacity: 0, scale: 0.93, y: -6 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ type: "spring", stiffness: 420, damping: 28 }}
+        transition={{ type: "spring", stiffness: 600, damping: 38 }}
         onClick={(e) => e.stopPropagation()}
         style={{
           position: "fixed",

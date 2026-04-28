@@ -208,10 +208,10 @@ function ThoughtCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: 
   }
 
   return (
-    <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: item.placed ? 0.4 : 1, y: 0 }} exit={{ opacity: 0, x: -8 }}
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: item.placed ? 0.4 : 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.12 }}
       draggable={!editing}
       onDragStart={e => { e.dataTransfer.setData("text/capture-json", JSON.stringify(item)); e.dataTransfer.effectAllowed = "copy"; }}
-      style={{ borderRadius: 10, background: editing ? "#FFFCF5" : "#FAF8F2", border: editing ? "1px solid #D4CEBC" : "0.5px solid #E2DFDA", marginBottom: 5, padding: "8px 10px", position: "relative", cursor: editing ? "default" : "grab", transition: "background 0.15s, border-color 0.15s" }}
+      style={{ borderRadius: 10, background: editing ? "#FFFCF5" : "#FAF8F2", border: editing ? "1px solid #D4CEBC" : "0.5px solid #E2DFDA", marginBottom: 5, padding: "8px 10px", position: "relative", cursor: editing ? "default" : "grab", transition: "background 0.1s, border-color 0.1s" }}
     >
       {/* Header row */}
       <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
@@ -278,7 +278,7 @@ function TaskCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
   function save() { const v = draft.trim(); if (v && v !== item.title) patchCapture(item.id, { title: v }); setEditing(false); }
 
   return (
-    <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: item.placed ? 0.4 : 1, y: 0 }} exit={{ opacity: 0, x: -8 }}
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: item.placed ? 0.4 : 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.12 }}
       draggable={!editing}
       onDragStart={e => { e.dataTransfer.setData("text/capture-json", JSON.stringify(item)); e.dataTransfer.effectAllowed = "copy"; }}
       style={{ borderRadius: 10, background: editing ? "#F4FAF4" : "#F2F8F2", border: editing ? "1px solid #A8CCA6" : "0.5px solid #C8DEC6", marginBottom: 5, padding: "8px 10px", cursor: editing ? "default" : "grab" }}
@@ -326,7 +326,7 @@ function RefCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e: 
   function save() { const v = draft.trim(); if (v && v !== item.title) patchCapture(item.id, { title: v }); setEditing(false); }
 
   return (
-    <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: item.placed ? 0.4 : 1, y: 0 }} exit={{ opacity: 0, x: -8 }}
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: item.placed ? 0.4 : 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.12 }}
       draggable={!editing}
       onDragStart={e => { e.dataTransfer.setData("text/capture-json", JSON.stringify(item)); e.dataTransfer.effectAllowed = "copy"; }}
       style={{ borderRadius: 10, background: editing ? "#FDF7EE" : "#FBF5EB", border: editing ? "1px solid #D4B898" : "0.5px solid #E8D8BC", marginBottom: 5, padding: "8px 10px", display: "flex", gap: 8, cursor: editing ? "default" : "grab" }}
@@ -378,7 +378,7 @@ function FileCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
   function save() { const v = draft.trim(); if (v && v !== item.title) patchCapture(item.id, { title: v }); setEditing(false); }
 
   return (
-    <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: item.placed ? 0.4 : 1, y: 0 }} exit={{ opacity: 0, x: -8 }}
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: item.placed ? 0.4 : 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.12 }}
       draggable={!editing}
       onDragStart={e => { e.dataTransfer.setData("text/capture-json", JSON.stringify(item)); e.dataTransfer.effectAllowed = "copy"; }}
       style={{ borderRadius: 10, background: editing ? "#FFFDF8" : "#FAFAFA", border: editing ? "1px solid #C8C4BE" : "0.5px solid #E5E4E0", marginBottom: 5, padding: "8px 10px", cursor: editing ? "default" : "grab" }}
@@ -435,10 +435,10 @@ function PlacePicker({ item, anchorPos, dayEvents, onAttach, onCreateEvent, onCl
     <>
       <div style={{ position: "fixed", inset: 0, zIndex: 998 }} onClick={onClose} />
       <motion.div
-        initial={{ opacity: 0, scale: 0.93, y: -4 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ type: "spring", stiffness: 420, damping: 28 }}
+        initial={{ opacity: 0, y: -4 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -2 }}
+        transition={{ duration: 0.12, ease: "easeOut" }}
         style={{
           position: "fixed", left: x, top: y,
           width: panelW,
@@ -564,9 +564,10 @@ function LinkCard({ item, onPlace, onRemove }: { item: CaptureItem; onPlace: (e:
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: item.placed ? 0.45 : 1, y: 0 }}
-      exit={{ opacity: 0, x: -8 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: item.placed ? 0.45 : 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.12 }}
       draggable
       onDragStart={e => { e.dataTransfer.setData("text/capture-json", JSON.stringify(item)); e.dataTransfer.effectAllowed = "copy"; }}
       style={{

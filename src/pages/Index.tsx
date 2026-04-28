@@ -1051,12 +1051,12 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                   }),
                   center: {
                     opacity: 1, scaleY: 1, y: 0,
-                    transition: { type: "spring", stiffness: 280, damping: 28, mass: 0.9 },
+                    transition: { type: "spring", stiffness: 480, damping: 36 },
                   },
                   exit: {
                     opacity: 0, scaleY: 0.88, y: -16,
                     transformOrigin: "top center",
-                    transition: { duration: 0.22, ease: [0.4, 0, 1, 1] },
+                    transition: { duration: 0.12, ease: [0.4, 0, 1, 1] },
                   },
                 }}
                 initial="enter"
@@ -1085,7 +1085,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                   }),
                   center: {
                     opacity: 1, scaleY: 1, scaleX: 1, y: 0,
-                    transition: { type: "spring", stiffness: 300, damping: 30, mass: 0.85 },
+                    transition: { type: "spring", stiffness: 480, damping: 36 },
                   },
                   exit: {
                     opacity: 0,
@@ -1093,7 +1093,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                     scaleX: 0.96,
                     y: -8,
                     transformOrigin: "top center",
-                    transition: { duration: 0.28, ease: [0.4, 0, 1, 1] },
+                    transition: { duration: 0.12, ease: [0.4, 0, 1, 1] },
                   },
                 }}
                 initial="enter"
