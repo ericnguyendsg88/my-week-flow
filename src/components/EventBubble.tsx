@@ -198,7 +198,10 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
       setEditMode(false);
       setExpandSection(null);
     }
-  }, [showDetail, event]);
+  // Only re-sync when the panel opens (showDetail false→true), NOT on every event prop change.
+  // Including `event` in deps would reset in-progress edits on every parent re-render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showDetail]);
 
   const isCompleted = event.completed === true;
   const isSkipped   = event.completed === false;
@@ -280,16 +283,18 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
 
   function saveAll() {
     if (!onUpdate) { setEditMode(false); return; }
-    onUpdate({
+    // Only patch fields that actually changed — never overwrite unchanged time/date.
+    const patch: Partial<CalEvent> = {
       title: editTitle.trim() || event.title,
-      date: editDate,
-      start: editStart,
-      duration: editDuration,
       tagId: editTagId || undefined,
       where: editLocation.trim() || undefined,
       who: editPeople.trim() || undefined,
       tentative: editTentative || undefined,
-    });
+    };
+    if (editDate !== event.date) patch.date = editDate;
+    if (editStart !== event.start) patch.start = editStart;
+    if (editDuration !== event.duration) patch.duration = editDuration;
+    onUpdate(patch);
     setEditMode(false);
     setExpandSection(null);
   }
@@ -332,7 +337,7 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
 
   const detailPanel = showDetail && createPortal(
     <>
-      <div style={{ position: "fixed", inset: 0, zIndex: 998 }} onClick={() => { setShowDetail(false); onSelect?.(null); }} />
+      <div style={{ position: "fixed", inset: 0, zIndex: 998 }} onMouseDown={(e) => e.stopPropagation()} onClick={() => { setShowDetail(false); onSelect?.(null); }} />
 
       <motion.div
         id="event-detail-panel"
@@ -341,6 +346,7 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
         exit={{ opacity: 0, scale: 0.95 }}
         transition={{ type: "spring", stiffness: 600, damping: 38 }}
         onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
         style={{
           position: "fixed",
           left: panelPos.x,
@@ -882,6 +888,9 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
             : stacked
             ? "2px solid rgba(255,255,255,0.70)"
             : "none",
+          borderLeft: isInProgress && !isCompleted && !isSkipped
+            ? `3px solid ${colors.text}`
+            : undefined,
           opacity: isSkipped ? 0.72 : 1,
           userSelect: "none",
           height: "100%",
@@ -894,19 +903,7 @@ export function EventBubble({ event, tags, onMark, onDelete, onUpdate, onCopy, o
           boxShadow: "none",
         }}
       >
-        {/* In-progress state: left border only */}
-        {isInProgress && !isCompleted && !isSkipped && (
-          <div style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            bottom: 0,
-            width: 3,
-            background: colors.text,
-            borderRadius: "12px 0 0 12px",
-            zIndex: 1,
-          }} />
-        )}
+        {/* In-progress state: handled via borderLeft on card */}
 
 
 

@@ -14,7 +14,7 @@ import {
   startOfWeek,
   subWeeks,
 } from "date-fns";
-import { Undo2, Redo2, Calendar, CalendarDays, EyeOff, Sparkles, CalendarRange, Settings, LayoutGrid, CheckSquare, Clock, Sun, User, Plus } from "lucide-react";
+import { Undo2, Redo2, Calendar, CalendarDays, EyeOff, Sparkles, CalendarRange, Settings, LayoutGrid, CheckSquare, Clock, Sun, User, Plus, LogOut, RefreshCcw } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CalEvent, Tag } from "@/types/event";
 import { DEFAULT_TAGS } from "@/lib/tags";
@@ -80,27 +80,30 @@ function historyReducer(state: HistoryState, action: HistoryAction): HistoryStat
 
 function useAuth() {
   const [userId, setUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setUserId(data.session?.user.id ?? null);
+      setUserEmail(data.session?.user.email ?? null);
       setChecking(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setUserId(session?.user.id ?? null);
+      setUserEmail(session?.user.email ?? null);
     });
     return () => subscription.unsubscribe();
   }, []);
 
-  return { userId, checking };
+  return { userId, userEmail, checking };
 }
 
 const Index = () => {
-  const { userId, checking } = useAuth();
+  const { userId, userEmail, checking } = useAuth();
 
   // No Supabase config (e.g. Lovable preview) — skip auth, run locally
-  if (!supabaseConfigured) return <HorizonApp userId="local" />;
+  if (!supabaseConfigured) return <HorizonApp userId="local" userEmail={null} />;
 
   if (checking) return (
     <div style={{ minHeight: "100vh", background: "#FAFAF8", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -110,7 +113,7 @@ const Index = () => {
 
   if (!userId) return <AuthGate onAuth={() => supabase.auth.getSession()} />;
 
-  return <HorizonApp userId={userId} />;
+  return <HorizonApp userId={userId} userEmail={userEmail} />;
 };
 
 function HorizonLogo({ size }: { size: number }) {
@@ -143,7 +146,7 @@ function HorizonLogo({ size }: { size: number }) {
   );
 }
 
-const HorizonApp = ({ userId }: { userId: string }) => {
+const HorizonApp = ({ userId, userEmail }: { userId: string; userEmail: string | null }) => {
   const today = startOfDay(new Date());
   const [weekWindowMode, setWeekWindowMode] = useState<"today-partial" | "today-bridge" | "calendar">("today-partial");
   const [currentWeekStart, setCurrentWeekStart] = useState(() => today);
@@ -245,7 +248,21 @@ const HorizonApp = ({ userId }: { userId: string }) => {
 
   const [tags, setTags] = useState<Tag[]>(() => loadCustomTags(DEFAULT_TAGS));
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
   const [sidebarShortcut, setSidebarShortcut] = useState(() => loadSidebarShortcut());
+
+  // Close profile menu when clicking outside
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [profileMenuOpen]);
 
   function handleTagsChange(next: Tag[]) {
     setTags(next);
@@ -478,6 +495,13 @@ const HorizonApp = ({ userId }: { userId: string }) => {
       if (!mod && !inInput) {
         if (e.key === "w") { e.preventDefault(); setViewMode("week"); return; }
         if (e.key === "m") { e.preventDefault(); setViewMode("month"); return; }
+        // Space — jump to today
+        if (e.key === " ") {
+          e.preventDefault();
+          if (viewMode === "focus") { setFocusDate(today); setSelectedDate(today); }
+          else { setCurrentWeekStart(today); setWeekWindowMode("today-partial"); setColWidthsResetKey(k => k + 1); }
+          return;
+        }
       }
 
       if (!mod) return;
@@ -520,7 +544,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [events, handlePasteEvent, sidebarShortcut]);
+  }, [events, handlePasteEvent, sidebarShortcut, viewMode, today]);
 
   const focusDateKey = format(focusDate, "yyyy-MM-dd");
   const displayDates = viewMode === "focus"
@@ -764,24 +788,88 @@ const HorizonApp = ({ userId }: { userId: string }) => {
 
             {/* ── Bottom: Profile + Settings + Export/Import ── */}
             <div style={{ flexShrink: 0, padding: "8px 14px 16px", borderTop: "1px solid #EDE9E4" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, padding: "6px 8px", borderRadius: 10, cursor: "pointer" }}
-                  onMouseEnter={e => { e.currentTarget.style.background = "#F3F0EC"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, position: "relative" }} ref={profileMenuRef}>
+                <button
+                  onClick={() => setProfileMenuOpen(v => !v)}
+                  style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, padding: "6px 8px", borderRadius: 10, cursor: "pointer", background: profileMenuOpen ? "#EEEDFE" : "transparent", border: "none", textAlign: "left", transition: "background 0.13s" }}
+                  onMouseEnter={e => { if (!profileMenuOpen) e.currentTarget.style.background = "#F3F0EC"; }}
+                  onMouseLeave={e => { if (!profileMenuOpen) e.currentTarget.style.background = "transparent"; }}
                 >
                   <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg, #C8C3F0, #7B73D6)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <User size={13} style={{ color: "#fff" }} />
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "#3A3630" }}>Profile</span>
-                </div>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#3A3630", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 }}>
+                    {userEmail ?? "Account"}
+                  </span>
+                </button>
                 <button onClick={() => setSettingsOpen(true)} title="Settings"
-                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 10, border: "none", background: "transparent", color: "#6B6460", cursor: "pointer", fontSize: 12, fontWeight: 500, transition: "all 0.13s" }}
+                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 10, border: "none", background: "transparent", color: "#6B6460", cursor: "pointer", fontSize: 12, fontWeight: 500, transition: "all 0.13s", flexShrink: 0 }}
                   onMouseEnter={e => { e.currentTarget.style.background = "#F3F0EC"; }}
                   onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                 >
                   <Settings size={14} strokeWidth={1.8} style={{ color: "#9B9590" }} />
                   Settings
                 </button>
+
+                {/* Profile dropdown */}
+                {profileMenuOpen && (
+                  <div style={{
+                    position: "absolute",
+                    bottom: "calc(100% + 6px)",
+                    left: 0,
+                    minWidth: 220,
+                    background: "#fff",
+                    borderRadius: 14,
+                    boxShadow: "0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)",
+                    border: "1px solid #EDE9E4",
+                    padding: "6px",
+                    zIndex: 500,
+                  }}>
+                    {/* Email header */}
+                    <div style={{ padding: "8px 12px 10px", borderBottom: "1px solid #F0EDE8", marginBottom: 4 }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", color: "#B0ACA6", textTransform: "uppercase", marginBottom: 2 }}>Signed in as</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#3A3630", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {userEmail ?? "—"}
+                      </div>
+                    </div>
+
+                    {/* Settings */}
+                    <button
+                      onClick={() => { setProfileMenuOpen(false); setSettingsOpen(true); }}
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, border: "none", background: "transparent", color: "#3A3630", cursor: "pointer", fontSize: 13, fontWeight: 500, textAlign: "left", transition: "background 0.12s" }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "#F3F0EC"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <Settings size={14} strokeWidth={1.8} style={{ color: "#9B9590", flexShrink: 0 }} />
+                      Settings
+                    </button>
+
+                    {/* Switch account */}
+                    <button
+                      onClick={() => { setProfileMenuOpen(false); supabase.auth.signOut().then(() => window.location.reload()); }}
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, border: "none", background: "transparent", color: "#3A3630", cursor: "pointer", fontSize: 13, fontWeight: 500, textAlign: "left", transition: "background 0.12s" }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "#F3F0EC"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <RefreshCcw size={14} strokeWidth={1.8} style={{ color: "#9B9590", flexShrink: 0 }} />
+                      Switch account
+                    </button>
+
+                    {/* Divider */}
+                    <div style={{ height: 1, background: "#F0EDE8", margin: "4px 0" }} />
+
+                    {/* Log out */}
+                    <button
+                      onClick={() => { setProfileMenuOpen(false); supabase.auth.signOut(); }}
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, border: "none", background: "transparent", color: "#C0392B", cursor: "pointer", fontSize: 13, fontWeight: 500, textAlign: "left", transition: "background 0.12s" }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "#FFF0EE"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <LogOut size={14} strokeWidth={1.8} style={{ color: "#C0392B", flexShrink: 0 }} />
+                      Log out
+                    </button>
+                  </div>
+                )}
               </div>
               <div style={{ display: "flex", gap: 6 }}>
                 <button
@@ -898,17 +986,17 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                   onClick={viewMode === "focus"
                     ? () => { const d = addDays(focusDate, -1); setFocusDate(d); setSelectedDate(d); }
                     : handleWeekBack}
-                  style={{ background: "#fff", border: "1px solid #EAEAEA", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#3C3489" }}>←</button>
+                  style={{ background: "#fff", border: "1px solid #EAEAEA", borderRadius: "50%", width: 26, height: 26, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#3C3489", fontSize: 13 }}>←</button>
                 <button
                   onClick={viewMode === "focus"
                     ? () => { setFocusDate(today); setSelectedDate(today); }
                     : handleWeekToday}
-                  style={{ background: "#fff", border: "1px solid #EAEAEA", borderRadius: 16, padding: "0 12px", height: 32, cursor: "pointer", fontSize: 12, fontWeight: 500, color: "#3C3489" }}>Today</button>
+                  style={{ background: "#fff", border: "1px solid #EAEAEA", borderRadius: 16, padding: "0 10px", height: 26, cursor: "pointer", fontSize: 11, fontWeight: 500, color: "#3C3489" }}>Today</button>
                 <button
                   onClick={viewMode === "focus"
                     ? () => { setViewMode("week"); }
                     : handleWeekForward}
-                  style={{ background: "#fff", border: "1px solid #EAEAEA", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#3C3489" }}>→</button>
+                  style={{ background: "#fff", border: "1px solid #EAEAEA", borderRadius: "50%", width: 26, height: 26, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#3C3489", fontSize: 13 }}>→</button>
               </div>
             )}
           </div>
@@ -921,8 +1009,8 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                 : sync.status === "error" ? "#FEF0EE"
                 : sync.status === "syncing" ? "#EEEDFE"
                 : "#F0EDE8",
-              borderRadius: 20, padding: "4px 10px",
-              fontSize: 11, fontWeight: 600,
+              borderRadius: 20, padding: "3px 8px",
+              fontSize: 10, fontWeight: 600,
               color: sync.status === "ok" ? "#27500A"
                 : sync.status === "error" ? "#C0392B"
                 : sync.status === "syncing" ? "#3C3489"
@@ -949,12 +1037,12 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                 onClick={() => setPrivacyMode((v) => !v)}
                 title={privacyMode ? "Show event details" : "Hide event details (privacy mode)"}
                 style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  height: 32, borderRadius: 20, padding: "0 14px",
+                  display: "flex", alignItems: "center", gap: 5,
+                  height: 26, borderRadius: 20, padding: "0 10px",
                   background: privacyMode ? "#3C3489" : "#fff",
                   border: privacyMode ? "1px solid #3C3489" : "1px solid #EAEAEA",
                   color: privacyMode ? "#fff" : "#3C3489",
-                  cursor: "pointer", fontSize: 12, fontWeight: 600,
+                  cursor: "pointer", fontSize: 11, fontWeight: 600,
                   transition: "all 0.15s",
                 }}
               >
@@ -970,7 +1058,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                 disabled={!canUndo}
                 title="Undo (Cmd+Z)"
                 style={{
-                  width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 26, height: 26, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
                   background: canUndo ? "#fff" : "transparent",
                   border: canUndo ? "1px solid #EAEAEA" : "1px solid transparent",
                   color: canUndo ? "#3C3489" : "#C8C5BE",
@@ -985,7 +1073,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                 disabled={!canRedo}
                 title="Redo (Cmd+Shift+Z)"
                 style={{
-                  width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 26, height: 26, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
                   background: canRedo ? "#fff" : "transparent",
                   border: canRedo ? "1px solid #EAEAEA" : "1px solid transparent",
                   color: canRedo ? "#3C3489" : "#C8C5BE",
@@ -1002,7 +1090,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
               onClick={() => setSettingsOpen(true)}
               title="Settings"
               style={{
-                width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                width: 26, height: 26, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
                 background: "#fff", border: "1px solid #EAEAEA", color: "#3C3489", cursor: "pointer",
                 transition: "all 0.15s",
               }}
@@ -1020,7 +1108,7 @@ const HorizonApp = ({ userId }: { userId: string }) => {
                   setViewMode(v);
                 }}
                   style={{
-                    borderRadius: 20, padding: "5px 14px", fontSize: 13,
+                    borderRadius: 20, padding: "3px 11px", fontSize: 12,
                     fontWeight: viewMode === v ? 500 : 400,
                     background: viewMode === v ? "#fff" : "transparent",
                     color: viewMode === v ? "hsl(var(--foreground))" : "hsl(var(--muted-foreground))",
@@ -1364,7 +1452,7 @@ function WeekGrid({ weekDates, events, tags, allCaptures, onMark, onDelete, onRe
   onOpenDayBoard?: (date: Date) => void;
   resetWidths?: number; // increment to trigger reset
 }) {
-  const START_HOUR = 0;
+  const START_HOUR = 6;
   const END_HOUR = 24;
   const n = weekDates.length;
 
@@ -1464,9 +1552,6 @@ function WeekGrid({ weekDates, events, tags, allCaptures, onMark, onDelete, onRe
 
 /* ── Time Gutter ── */
 const GUTTER_ANCHORS: Record<number, { label: string; sub?: string; accent?: boolean }> = {
-  0:  { label: "12 AM", sub: "midnight" },
-  2:  { label: "2 AM" },
-  4:  { label: "4 AM" },
   6:  { label: "6 AM",  sub: "morning" },
   8:  { label: "8 AM" },
   10: { label: "10 AM" },
@@ -1486,16 +1571,18 @@ function gutterTimeToY(mins: number): number {
   return GUTTER_LATE_START + (mins - GUTTER_LATE_START) / 3;
 }
 const GUTTER_TOTAL_HEIGHT = gutterTimeToY(24 * 60);
+// 12am–6am is always hidden; offset all y positions to start from 6am
+const GUTTER_OFFSET = gutterTimeToY(6 * 60); // 360px
 
 function TimeGutter({ startHour, endHour }: { startHour: number; endHour: number }) {
   const hours = Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i);
   return (
     <div className="shrink-0" style={{ width: 52, paddingTop: 64 }}>
-      <div style={{ position: "relative", height: GUTTER_TOTAL_HEIGHT }}>
+      <div style={{ position: "relative", height: GUTTER_TOTAL_HEIGHT - GUTTER_OFFSET }}>
         {hours.map((h) => {
           const anchor = GUTTER_ANCHORS[h];
           if (!anchor) return null;
-          const y = gutterTimeToY(h * 60);
+          const y = gutterTimeToY(h * 60) - GUTTER_OFFSET;
           return (
             <div
               key={h}
